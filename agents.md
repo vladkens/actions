@@ -19,8 +19,9 @@ Each fact has one source: an action's inputs and outputs are its `action.yml`, i
   only (no enums, namespaces, parameter properties), import with the `.ts` extension and
   `import type` for types. Shared code goes in `lib/`. Talk to GitHub through `gh` and `git`,
   both preinstalled on the hosted runners.
-- No third-party actions. Attestation stays an `actions/attest` step in the caller's workflow: a
-  JavaScript action can't call another action.
+- A JavaScript action can't call another action: steps that need an official one stay in the
+  caller's workflow (`actions/attest`, `rust-lang/crates-io-auth-action`) and pass their outputs
+  in. Don't reimplement them.
 
 ## Code
 

@@ -9,14 +9,15 @@ the steps that are the same everywhere.
 | [release-check](release-check/readme.md) | `release: vX.Y.Z` commit title = manifest version; notes from `changelog.md` |
 | [github-release](github-release/readme.md) | Tag, GitHub release, assets; a re-run uploads only what is missing |
 | [dev-release](dev-release/readme.md) | Rolling `dev` pre-release with the latest build's assets |
-| [crates-publish](crates-publish/readme.md) | crates.io Trusted Publishing; skips a version already published |
+| [crates-publish](crates-publish/readme.md) | `cargo publish`; skips a version already on crates.io |
 
 Use them as `vladkens/actions/<action>@v1`. `v1` moves to each compatible release.
 
 Each action is a Node 24 JavaScript action run from its TypeScript source: no build step and no
 dependencies on the runner. They talk to GitHub through `gh`, preinstalled on the hosted Ubuntu
-and macOS runners, with the job's `GITHUB_TOKEN` by default. Attestation stays an
-`actions/attest` step in the repo's workflow, since an action can't call another action.
+and macOS runners, with the job's `GITHUB_TOKEN` by default. An action can't call another
+action, so the repo's workflow keeps the steps that use official ones: `actions/attest` for
+attestations and `rust-lang/crates-io-auth-action` for the crates.io token.
 
 ## Releasing
 
@@ -120,8 +121,12 @@ jobs:
         with:
           name: dist
           path: target/distrib # git-ignored, so cargo publish packs a clean tree
+      # https://crates.io/docs/trusted-publishing
+      - id: auth
+        uses: rust-lang/crates-io-auth-action@v1
       - uses: vladkens/actions/crates-publish@v1
         with:
+          token: ${{ steps.auth.outputs.token }}
           no-verify: true
       - id: release
         uses: vladkens/actions/github-release@v1
@@ -137,73 +142,8 @@ jobs:
 ```
 
 A repo without binaries drops `dev`, `dev-release`, the download and `files`; a repo that builds
-its release archive in the `release` job (macmon) builds before `github-release` and passes that
+its release archive in the `release` job builds before `github-release` and passes that
 file.
-
-## Migrating a repo
-
-One PR in the repo, following its own `agents.md`.
-
-- Replace with the actions: the commit title check, the changelog `awk`, the crates.io check +
-  `crates-io-auth-action` + `cargo publish`, the tag check and push, `gh release create/upload`,
-  the `dev` tag move and `gh release` calls.
-- Keep in the repo: test and build jobs, caches, toolchains, archive names, a binary's `-V` check
-  against `${TAG#v}`, `actions/attest`, Homebrew, `permissions:` per job, `concurrency`.
-- Pass untrusted values to scripts only through `env:` (e.g. `TAG: ${{ needs.release-check.outputs.tag }}`),
-  never `${{ … }}` inside `run:`.
-- crates.io's Trusted Publishing settings name the repo and the workflow file (`main.yml`); they
-  stay valid while the publish step stays in that file. If the settings name an environment, the
-  publishing job needs `environment:` with that name.
-- `github-release` needs `notes`: `${{ steps.check.outputs.notes }}` in the job that ran
-  `release-check`, else `${{ needs.<job>.outputs.notes }}` exported from it (`notes-file` is a
-  path on that job's runner only).
-- `release-check` already refuses a tag on another commit, so it runs before `crates-publish`.
-- Prove it on a `dev` build (main push) and on the next real release.
-
-Bugs the old copies had, now fixed by the actions:
-
-- The notes `awk "/^## ${VERSION}/…"` built a regex from the tag: `v1.0.1` also matched `v1.0.10`,
-  and `.` matched any character.
-- An exact title check failed on the squash merge's ` (#N)` (macmon, delta-farmer).
-- Tag-push workflows failed on a re-run: duplicate crate, duplicate release.
-- `${{ github.ref_name }}` interpolated into `run:` (script injection).
-- unjar's hardcoded `if: github.ref_name != 'v0.1.0'` to skip a version already published.
-- unjar and badgelib accepted any non-empty notes; the actions require a `- ` entry.
-
-### wavo
-
-Its workflow is the example above: `release-check`'s steps, the `release` job's tag check, rename,
-crates.io and release steps, and `dev-release`'s shell script become the actions. Same archive
-names, same artifact (`wavo-dev` there), same attestation.
-
-### macmon
-
-- `dev`: builds and writes in one job; split it like the example (build + upload artifact, then a
-  write job with `dev-release`), or call `dev-release` in place with `files: macmon-dev.tar.gz`.
-  Optionally attest, as wavo does.
-- `release`: `release-check` as its first step (or a job); then the build and `macmon -V` check
-  with `TAG` from its output; `crates-publish` (without `no-verify`, nothing ran the dry run);
-  `github-release` with `notes: ${{ steps.check.outputs.notes }}` and
-  `files: macmon-${{ steps.check.outputs.tag }}.tar.gz`.
-- The Homebrew bump hashes `steps.release.outputs.files` (the published archive, also on a
-  re-run, which the old `gh release download` did by hand). It runs on macOS, so its BSD
-  `sed -i ''` works; on Linux it would need `sed -i`.
-
-### unjar
-
-- Moves from tag pushes to the `release:` commit: drop `tags: ["v*"]` from `on.push`, gate the
-  release jobs on the commit title, and replace `github.ref_name` with `release-check`'s `tag`.
-- `publish`: `release-check`, the `-V` check, `crates-publish`; drop the `v0.1.0` exception.
-  Export `tag` and `notes` as job outputs.
-- `release` (macOS, builds the aarch64 binary): archive
-  `unjar-${TAG}-aarch64-apple-darwin.tar.gz`, `github-release` with it and
-  `notes: ${{ needs.publish.outputs.notes }}`, `actions/attest` on `files`.
-
-### badgelib
-
-- Moves from tag pushes to the `release:` commit, as unjar.
-- `publish` + `release` become one job: `release-check`, `crates-publish`, `github-release`
-  with `notes: ${{ steps.check.outputs.notes }}` and no `files`.
 
 ## Development
 

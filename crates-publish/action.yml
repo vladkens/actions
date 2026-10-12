@@ -1,6 +1,9 @@
 name: crates-publish
-description: Publish a crate to crates.io through Trusted Publishing, unless this version is already there.
+description: Publish a crate to crates.io, unless this version is already there.
 inputs:
+  token:
+    description: "A crates.io token: `rust-lang/crates-io-auth-action`'s `token` output. Not needed with `dry-run`."
+    default: ''
   manifest-path:
     description: The crate's or workspace's Cargo.toml.
     default: Cargo.toml
@@ -11,7 +14,7 @@ inputs:
     description: Pass `--no-verify`, when an earlier job already ran `cargo publish --dry-run`.
     default: 'false'
   dry-run:
-    description: Run `cargo publish --dry-run` instead, without a crates.io token; works in a read-only job.
+    description: Run `cargo publish --dry-run` instead, without a token; works in a read-only job.
     default: 'false'
 outputs:
   skipped:
@@ -19,4 +22,3 @@ outputs:
 runs:
   using: node24
   main: index.ts
-  post: post.ts

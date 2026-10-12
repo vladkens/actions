@@ -1,6 +1,6 @@
 import { realpathSync } from 'node:fs'
-import { bool, fail, input, main, notice, run, saveState, setOutput, warning } from '../lib/core.ts'
-import { exchange, idToken, isPublished, revoke } from './crates.ts'
+import { bool, fail, input, main, notice, run, setOutput } from '../lib/core.ts'
+import { isPublished } from './crates.ts'
 
 type Metadata = { packages: { name: string; version: string; manifest_path: string }[] }
 
@@ -27,23 +27,9 @@ await main(async () => {
   const args = ['publish', '--locked', '--manifest-path', manifest, '--package', pkg.name]
   if (bool('no-verify')) args.push('--no-verify')
   if (bool('dry-run')) {
-    // With `id-token: write`, also prove the OIDC request works, without exchanging the token.
-    if (process.env.ACTIONS_ID_TOKEN_REQUEST_URL) await idToken('crates.io')
     run('cargo', [...args, '--dry-run'], { stream: true })
     return
   }
-
-  const token = await exchange(await idToken('crates.io'))
-  saveState('token', token) // the post step revokes it if this step is cancelled
-  try {
-    run('cargo', args, { env: { CARGO_REGISTRY_TOKEN: token }, stream: true })
-  } finally {
-    // A failed revoke must not fail a published crate: the post step tries again.
-    try {
-      await revoke(token)
-      saveState('token', '')
-    } catch (err) {
-      warning(`${err instanceof Error ? err.message : err}; the post step retries`)
-    }
-  }
+  const token = input('token') || fail("set 'token' (rust-lang/crates-io-auth-action's output)")
+  run('cargo', args, { env: { CARGO_REGISTRY_TOKEN: token }, stream: true })
 })

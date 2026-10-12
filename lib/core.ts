@@ -50,34 +50,13 @@ export function env(name: string): string {
   return process.env[name] || fail(`${name} is not set: run this inside GitHub Actions`)
 }
 
-function writeFileCommand(file: string, name: string, value: string): void {
-  const delimiter = `EOF_${randomUUID()}`
-  appendFileSync(env(file), `${name}<<${delimiter}\n${value}\n${delimiter}\n`)
-}
-
 export function setOutput(name: string, value: string): void {
-  writeFileCommand('GITHUB_OUTPUT', name, value)
-}
-
-// Kept for the action's `post` step, which reads it back with `state`.
-export function saveState(name: string, value: string): void {
-  writeFileCommand('GITHUB_STATE', name, value)
-}
-
-export function state(name: string): string {
-  return process.env[`STATE_${name}`] ?? ''
-}
-
-export function mask(secret: string): void {
-  console.log(`::add-mask::${escape(secret)}`)
+  const delimiter = `EOF_${randomUUID()}`
+  appendFileSync(env('GITHUB_OUTPUT'), `${name}<<${delimiter}\n${value}\n${delimiter}\n`)
 }
 
 export function notice(message: string): void {
   console.log(`::notice::${escape(message)}`)
-}
-
-export function warning(message: string): void {
-  console.log(`::warning::${escape(message)}`)
 }
 
 // Prints untrusted text with workflow commands off, so a `::` line in it is not run.

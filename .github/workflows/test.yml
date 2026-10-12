@@ -100,9 +100,6 @@ jobs:
 
   crates-publish:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write # dry-run then also requests the OIDC token
     steps:
       - uses: actions/checkout@v7
       - id: new
@@ -118,7 +115,15 @@ jobs:
       - env:
           SKIPPED: ${{ steps.new.outputs.skipped }} ${{ steps.published.outputs.skipped }}
         run: test "$SKIPPED" = "false true"
-      - run: node tests/exchange.ts
+      # Not on crates.io and not a dry run: must stop for the missing token before publishing.
+      - id: no-token
+        continue-on-error: true
+        uses: ./crates-publish
+        with:
+          manifest-path: tests/fixtures/crate/Cargo.toml
+      - env:
+          OUTCOME: ${{ steps.no-token.outcome }}
+        run: test "$OUTCOME" = failure
 
   # Real releases of this repo under throwaway tags, deleted at the end.
   github-release:
