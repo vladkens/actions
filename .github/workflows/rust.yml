@@ -20,7 +20,7 @@ on:
         type: string
         default: ''
       runner:
-        description: The runner for `dist`.
+        description: The runner for `dist` and the crate's `cargo publish --dry-run`.
         type: string
         default: ubuntu-latest
       name:
@@ -98,9 +98,10 @@ jobs:
         with:
           subject-path: ${{ steps.dev.outputs.files }}
 
+  # On `runner`: the dry run compiles the crate, which may build only there (macmon links IOKit).
   release-check:
     if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:')
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     permissions:
       contents: read
     outputs:
