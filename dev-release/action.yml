@@ -1,0 +1,26 @@
+name: dev-release
+description: Point a rolling pre-release (`dev`) at this commit and replace its assets.
+inputs:
+  tag:
+    description: The rolling tag and release.
+    default: dev
+  title:
+    description: The release title.
+    default: Dev build
+  notes:
+    description: The release notes; the branch, commit and build time when empty.
+    default: ''
+  files:
+    description: The assets, one glob per line; assets from earlier builds not among them are deleted.
+    required: true
+  token:
+    description: A token with `contents: write`.
+    default: ${{ github.token }}
+outputs:
+  skipped:
+    description: "`true` when the branch has moved past this commit and nothing was released."
+  files:
+    description: The assets' local paths, one per line.
+runs:
+  using: node24
+  main: index.ts

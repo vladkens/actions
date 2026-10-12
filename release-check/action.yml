@@ -1,0 +1,24 @@
+name: release-check
+description: Check a `release: vX.Y.Z` commit against the manifest's version and take its notes from the changelog.
+inputs:
+  manifest:
+    description: Cargo.toml, pyproject.toml or package.json; the first one found when empty.
+    default: ''
+  changelog:
+    description: The changelog with a `## vX.Y.Z` section per release.
+    default: changelog.md
+  message:
+    description: The commit message whose first line must be `release: vX.Y.Z`, optionally with ` (#N)`.
+    default: ${{ github.event.head_commit.message }}
+outputs:
+  tag:
+    description: The release tag, `v` + version.
+  version:
+    description: The manifest's version.
+  notes:
+    description: The changelog section's text.
+  notes-file:
+    description: A file with the notes.
+runs:
+  using: node24
+  main: index.ts

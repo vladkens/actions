@@ -1,0 +1,233 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: make check
+
+  # Both runner OSes, which also proves the runner runs `main: index.ts` there.
+  release-check:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: cargo
+        uses: ./release-check
+        with:
+          manifest: tests/fixtures/cargo/Cargo.toml
+          changelog: tests/fixtures/changelog.md
+          message: |
+            release: v1.0.1 (#12)
+
+            * squashed body
+      - env:
+          TAG: ${{ steps.cargo.outputs.tag }}
+          VERSION: ${{ steps.cargo.outputs.version }}
+          NOTES: ${{ steps.cargo.outputs.notes }}
+          NOTES_FILE: ${{ steps.cargo.outputs.notes-file }}
+        run: |
+          test "$TAG" = v1.0.1
+          test "$VERSION" = 1.0.1
+          test "$NOTES" = "$(printf '### Features\n\n- Added one (#12)')"
+          test "$(cat "$NOTES_FILE")" = "$NOTES"
+
+      - id: pyproject
+        uses: ./release-check
+        with:
+          manifest: tests/fixtures/pyproject/pyproject.toml
+          changelog: tests/fixtures/changelog.md
+          message: 'release: v1.0.10'
+      - env:
+          TAG: ${{ steps.pyproject.outputs.tag }}
+          NOTES: ${{ steps.pyproject.outputs.notes }}
+        run: |
+          test "$TAG" = v1.0.10
+          grep -q '^- Fixed ten$' <<< "$NOTES"
+          ! grep -q 'Added one\|^---' <<< "$NOTES"
+
+      # Each of these must fail.
+      - id: wrong-version
+        continue-on-error: true
+        uses: ./release-check
+        with:
+          manifest: tests/fixtures/cargo/Cargo.toml
+          changelog: tests/fixtures/changelog.md
+          message: 'release: v1.0.10'
+      - id: not-a-release
+        continue-on-error: true
+        uses: ./release-check
+        with:
+          manifest: tests/fixtures/cargo/Cargo.toml
+          changelog: tests/fixtures/changelog.md
+          message: 'fix: v1.0.1'
+      - id: no-entry
+        continue-on-error: true
+        uses: ./release-check
+        with:
+          manifest: tests/fixtures/npm/package.json
+          changelog: tests/fixtures/changelog.md
+          message: 'release: v0.9.0'
+      - id: no-changelog
+        continue-on-error: true
+        uses: ./release-check
+        with:
+          manifest: tests/fixtures/cargo/Cargo.toml
+          changelog: tests/fixtures/missing.md
+          message: 'release: v1.0.1'
+      - env:
+          OUTCOMES: >-
+            ${{ steps.wrong-version.outcome }} ${{ steps.not-a-release.outcome }}
+            ${{ steps.no-entry.outcome }} ${{ steps.no-changelog.outcome }}
+        run: test "$OUTCOMES" = "failure failure failure failure"
+
+  crates-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # dry-run then also requests the OIDC token
+    steps:
+      - uses: actions/checkout@v7
+      - id: new
+        uses: ./crates-publish
+        with:
+          manifest-path: tests/fixtures/crate/Cargo.toml
+          dry-run: true
+      - id: published
+        uses: ./crates-publish
+        with:
+          manifest-path: tests/fixtures/crate-published/Cargo.toml
+          dry-run: true
+      - env:
+          SKIPPED: ${{ steps.new.outputs.skipped }} ${{ steps.published.outputs.skipped }}
+        run: test "$SKIPPED" = "false true"
+
+  # Real releases of this repo under throwaway tags, deleted at the end.
+  github-release:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: test-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2 # HEAD^ for a tag on another commit
+
+      - run: |
+          mkdir dist
+          echo one > dist/fix-dev-a.txt
+      - id: first
+        uses: ./github-release
+        with:
+          tag: ${{ env.TAG }}
+          notes: first
+          files: dist/*
+          rename-from: fix-dev-
+          rename-to: fix-${{ env.TAG }}-
+      - env:
+          FILES: ${{ steps.first.outputs.files }}
+        run: |
+          test "$FILES" = "dist/fix-$TAG-a.txt"
+          test "$(git ls-remote origin "refs/tags/$TAG" | cut -f1)" = "$GITHUB_SHA"
+          test "$(gh release view "$TAG" --json body,assets --jq '.body + "|" + ([.assets[].name] | sort | join(","))')" = "first|fix-$TAG-a.txt"
+
+      # A re-run with a rebuilt `a` and a new `b`: `a` stays as published, `b` is added.
+      - run: |
+          rm dist/*
+          echo rebuilt > dist/fix-dev-a.txt
+          echo two > dist/fix-dev-b.txt
+      - id: second
+        uses: ./github-release
+        with:
+          tag: ${{ env.TAG }}
+          notes: second
+          files: dist/*
+          rename-from: fix-dev-
+          rename-to: fix-${{ env.TAG }}-
+      - run: |
+          test "$(cat "dist/fix-$TAG-a.txt")" = one
+          test "$(gh release view "$TAG" --json body,assets --jq '.body + "|" + ([.assets[].name] | sort | join(","))')" = "first|fix-$TAG-a.txt,fix-$TAG-b.txt"
+
+      - run: gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$TAG-other" -f "sha=$(git rev-parse HEAD^)"
+      - id: other-commit
+        continue-on-error: true
+        uses: ./github-release
+        with:
+          tag: ${{ env.TAG }}-other
+      - env:
+          OUTCOME: ${{ steps.other-commit.outcome }}
+        run: |
+          test "$OUTCOME" = failure
+          ! gh release view "$TAG-other"
+
+      - if: always()
+        run: |
+          gh release delete "$TAG" --cleanup-tag --yes || true
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG-other" || true
+
+  dev-release:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: test-dev-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - run: |
+          mkdir dist
+          echo one > dist/x-a.txt
+          echo one > dist/x-b.txt
+      - id: first
+        uses: ./dev-release
+        with:
+          tag: ${{ env.TAG }}
+          files: dist/*
+      # Skipped when main moved on during the run; then there is nothing to check.
+      - if: steps.first.outputs.skipped == 'false'
+        run: |
+          test "$(git ls-remote origin "refs/tags/$TAG" | cut -f1)" = "$GITHUB_SHA"
+          test "$(gh release view "$TAG" --json isPrerelease,assets --jq '"\(.isPrerelease)|" + ([.assets[].name] | sort | join(","))')" = "true|x-a.txt,x-b.txt"
+
+      # The next build drops `b`, adds `c` and changes `a`.
+      - if: steps.first.outputs.skipped == 'false'
+        run: |
+          rm dist/x-b.txt
+          echo two > dist/x-a.txt
+          echo two > dist/x-c.txt
+      - id: second
+        if: steps.first.outputs.skipped == 'false'
+        uses: ./dev-release
+        with:
+          tag: ${{ env.TAG }}
+          title: Test build
+          files: dist/*
+      - if: steps.second.outputs.skipped == 'false'
+        run: |
+          test "$(gh release view "$TAG" --json name,assets --jq '.name + "|" + ([.assets[].name] | sort | join(","))')" = "Test build|x-a.txt,x-c.txt"
+          test "$(gh release download "$TAG" --pattern x-a.txt --output -)" = two
+
+      - if: always()
+        run: gh release delete "$TAG" --cleanup-tag --yes || true

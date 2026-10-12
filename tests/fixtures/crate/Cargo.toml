@@ -1,0 +1,8 @@
+# Not on crates.io: crates-publish runs only `cargo publish --dry-run` on it.
+[package]
+name = "vladkens-actions-fixture"
+version = "0.1.0"
+edition = "2024"
+description = "Test fixture of github.com/vladkens/actions"
+license = "MIT"
+repository = "https://github.com/vladkens/actions"

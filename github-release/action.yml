@@ -1,0 +1,33 @@
+name: github-release
+description: Tag the commit and create its GitHub release with assets; a re-run uploads only what is missing.
+inputs:
+  tag:
+    description: The release tag, e.g. release-check's `tag` output.
+    required: true
+  title:
+    description: The release title; the tag when empty.
+    default: ''
+  notes:
+    description: The release notes, for a new release.
+    default: ''
+  notes-file:
+    description: A file with the release notes, used instead of `notes`.
+    default: ''
+  files:
+    description: Assets to attach, one glob per line; each must match a file.
+    default: ''
+  rename-from:
+    description: Replace this part of the assets' names, e.g. `wavo-dev-`.
+    default: ''
+  rename-to:
+    description: The replacement, e.g. `wavo-v1.2.3-`.
+    default: ''
+  token:
+    description: A token with `contents: write`.
+    default: ${{ github.token }}
+outputs:
+  files:
+    description: The assets' local paths after renaming, one per line, with the published bytes.
+runs:
+  using: node24
+  main: index.ts

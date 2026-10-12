@@ -1,0 +1,5 @@
+# A version already on crates.io: crates-publish must skip it before doing anything.
+[package]
+name = "serde"
+version = "1.0.0"
+edition = "2024"

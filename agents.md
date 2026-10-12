@@ -17,7 +17,8 @@ Each fact has one source: an action's inputs and outputs are its `action.yml`, i
 - No runtime dependencies and no build step: each action is `runs.using: node24` with
   `main: index.ts`, run by the runner's Node through type stripping. Write erasable TypeScript
   only (no enums, namespaces, parameter properties), import with the `.ts` extension and
-  `import type` for types. Shared code goes in `lib/`.
+  `import type` for types. Shared code goes in `lib/`. Talk to GitHub through `gh` and `git`,
+  both preinstalled on the hosted runners.
 - No third-party actions. Attestation stays an `actions/attest` step in the caller's workflow: a
   JavaScript action can't call another action.
 
