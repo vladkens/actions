@@ -23,7 +23,7 @@ inputs:
     description: The replacement, e.g. `wavo-v1.2.3-`.
     default: ''
   token:
-    description: A token with `contents: write`.
+    description: "A token with `contents: write`."
     default: ${{ github.token }}
 outputs:
   files:

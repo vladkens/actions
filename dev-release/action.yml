@@ -14,7 +14,7 @@ inputs:
     description: The assets, one glob per line; assets from earlier builds not among them are deleted.
     required: true
   token:
-    description: A token with `contents: write`.
+    description: "A token with `contents: write`."
     default: ${{ github.token }}
 outputs:
   skipped:
