@@ -14,5 +14,5 @@ runs this repo's actions at rust.yml's own commit.
       `cache`, `cache-directories`, `crates`, `dev-tag`, `dev-branch`; output `tag`.
 - [x] `test.yml`: the dist → dev-release path with a fake build and a throwaway tag, including
       `gh attestation verify`.
-- [ ] Green on the branch (`workflow_dispatch`), then a PR for the person.
+- [x] Green on the branch (`workflow_dispatch`), then a PR for the person.
 - [ ] The release path proven by wavo's first release through it.
