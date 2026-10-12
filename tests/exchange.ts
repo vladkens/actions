@@ -9,6 +9,7 @@ try {
   console.log('crates.io issued a token for this repo, but it has no Trusted Publishing config')
   process.exit(1)
 } catch (err) {
-  if (!(err instanceof Failure) || !/HTTP 4\d\d/.test(err.message) || /HTTP 401/.test(err.message)) throw err
+  // crates.io read the token's claims and found no config: anything else is a broken request.
+  if (!(err instanceof Failure) || !/HTTP 400 .*No Trusted Publishing config found/.test(err.message)) throw err
   console.log(`refused as expected: ${err.message}`)
 }
