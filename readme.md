@@ -82,11 +82,11 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: dist
-          path: dist
+          path: target/distrib
       - id: dev
         uses: vladkens/actions/dev-release@v1
         with:
-          files: dist/*
+          files: target/distrib/*
       # Users check an archive with `gh attestation verify FILE -R vladkens/wavo`.
       - if: steps.dev.outputs.skipped == 'false'
         uses: actions/attest@v4
@@ -119,7 +119,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: dist
-          path: dist
+          path: target/distrib # git-ignored, so cargo publish packs a clean tree
       - uses: vladkens/actions/crates-publish@v1
         with:
           no-verify: true
@@ -128,7 +128,7 @@ jobs:
         with:
           tag: ${{ needs.release-check.outputs.tag }}
           notes: ${{ needs.release-check.outputs.notes }}
-          files: dist/*
+          files: target/distrib/*
           rename-from: wavo-dev-
           rename-to: wavo-${{ needs.release-check.outputs.tag }}-
       - uses: actions/attest@v4
@@ -154,6 +154,10 @@ One PR in the repo, following its own `agents.md`.
 - crates.io's Trusted Publishing settings name the repo and the workflow file (`main.yml`); they
   stay valid while the publish step stays in that file. If the settings name an environment, the
   publishing job needs `environment:` with that name.
+- `github-release` needs `notes`: `${{ steps.check.outputs.notes }}` in the job that ran
+  `release-check`, else `${{ needs.<job>.outputs.notes }}` exported from it (`notes-file` is a
+  path on that job's runner only).
+- `release-check` already refuses a tag on another commit, so it runs before `crates-publish`.
 - Prove it on a `dev` build (main push) and on the next real release.
 
 Bugs the old copies had, now fixed by the actions:
@@ -179,7 +183,8 @@ names, same artifact (`wavo-dev` there), same attestation.
   Optionally attest, as wavo does.
 - `release`: `release-check` as its first step (or a job); then the build and `macmon -V` check
   with `TAG` from its output; `crates-publish` (without `no-verify`, nothing ran the dry run);
-  `github-release` with `files: macmon-${{ steps.check.outputs.tag }}.tar.gz`.
+  `github-release` with `notes: ${{ steps.check.outputs.notes }}` and
+  `files: macmon-${{ steps.check.outputs.tag }}.tar.gz`.
 - The Homebrew bump hashes `steps.release.outputs.files` (the published archive, also on a
   re-run, which the old `gh release download` did by hand). It runs on macOS, so its BSD
   `sed -i ''` works; on Linux it would need `sed -i`.
@@ -189,15 +194,16 @@ names, same artifact (`wavo-dev` there), same attestation.
 - Moves from tag pushes to the `release:` commit: drop `tags: ["v*"]` from `on.push`, gate the
   release jobs on the commit title, and replace `github.ref_name` with `release-check`'s `tag`.
 - `publish`: `release-check`, the `-V` check, `crates-publish`; drop the `v0.1.0` exception.
+  Export `tag` and `notes` as job outputs.
 - `release` (macOS, builds the aarch64 binary): archive
-  `unjar-${TAG}-aarch64-apple-darwin.tar.gz`, `github-release` with it, `actions/attest` on
-  `files`.
+  `unjar-${TAG}-aarch64-apple-darwin.tar.gz`, `github-release` with it and
+  `notes: ${{ needs.publish.outputs.notes }}`, `actions/attest` on `files`.
 
 ### badgelib
 
 - Moves from tag pushes to the `release:` commit, as unjar.
 - `publish` + `release` become one job: `release-check`, `crates-publish`, `github-release`
-  without `files`.
+  with `notes: ${{ steps.check.outputs.notes }}` and no `files`.
 
 ## Development
 

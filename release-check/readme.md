@@ -9,6 +9,8 @@ when something doesn't match.
 - The notes are the changelog's `## vX.Y.Z ...` section up to the next `## ` heading, without
   `---` rules. The tag is compared as a word: `v1.0.1` never takes `## v1.0.10`. The section must
   have at least one `- ` entry.
+- If the tag already exists, it must point to this commit. Checked here, before anything is
+  published, and again by `github-release`.
 
 Inputs and outputs: [action.yml](action.yml). Needs a checkout; no permissions beyond
 `contents: read`.
@@ -27,4 +29,4 @@ release-check:
 ```
 
 The commit message comes from the push event (`github.event.head_commit.message`); pass `message`
-to check another one.
+to check another one. `notes-file` exists only in this job: pass `notes` to other jobs.

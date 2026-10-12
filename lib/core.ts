@@ -80,6 +80,14 @@ export function warning(message: string): void {
   console.log(`::warning::${escape(message)}`)
 }
 
+// Prints untrusted text with workflow commands off, so a `::` line in it is not run.
+export function logText(text: string): void {
+  const resume = randomUUID()
+  console.log(`::stop-commands::${resume}`)
+  console.log(text)
+  console.log(`::${resume}::`)
+}
+
 function escape(data: string): string {
   return data.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')
 }

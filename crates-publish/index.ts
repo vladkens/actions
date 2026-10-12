@@ -1,20 +1,21 @@
-import { bool, fail, input, main, notice, run, saveState, setOutput } from '../lib/core.ts'
+import { realpathSync } from 'node:fs'
+import { bool, fail, input, main, notice, run, saveState, setOutput, warning } from '../lib/core.ts'
 import { exchange, idToken, isPublished, revoke } from './crates.ts'
 
-type Metadata = { workspace_root: string; packages: { name: string; version: string; manifest_path: string }[] }
+type Metadata = { packages: { name: string; version: string; manifest_path: string }[] }
 
 await main(async () => {
   const manifest = input('manifest-path')
   const meta = JSON.parse(
     run('cargo', ['metadata', '--no-deps', '--format-version', '1', '--manifest-path', manifest]),
   ) as Metadata
+  // `cargo metadata` lists every workspace member: take the named one, else the manifest's own.
   const name = input('package')
+  const own = realpathSync(manifest)
   const pkg = name
     ? meta.packages.find((x) => x.name === name)
-    : meta.packages.length === 1
-      ? meta.packages[0]
-      : meta.packages.find((x) => x.manifest_path === `${meta.workspace_root}/Cargo.toml`)
-  if (!pkg) fail(name ? `no package '${name}' in ${manifest}` : `${manifest} is a workspace: set 'package'`)
+    : meta.packages.find((x) => realpathSync(x.manifest_path) === own)
+  if (!pkg) fail(name ? `no package '${name}' in ${manifest}` : `${manifest} has no [package]: set 'package'`)
 
   if (await isPublished(pkg.name, pkg.version)) {
     notice(`${pkg.name} ${pkg.version} is already on crates.io`)
@@ -37,7 +38,12 @@ await main(async () => {
   try {
     run('cargo', args, { env: { CARGO_REGISTRY_TOKEN: token }, stream: true })
   } finally {
-    await revoke(token)
-    saveState('token', '')
+    // A failed revoke must not fail a published crate: the post step tries again.
+    try {
+      await revoke(token)
+      saveState('token', '')
+    } catch (err) {
+      warning(`${err instanceof Error ? err.message : err}; the post step retries`)
+    }
   }
 })

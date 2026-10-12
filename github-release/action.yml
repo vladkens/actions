@@ -8,10 +8,10 @@ inputs:
     description: The release title; the tag when empty.
     default: ''
   notes:
-    description: The release notes, for a new release.
+    description: The release notes, for a new release; it or `notes-file` is required.
     default: ''
   notes-file:
-    description: A file with the release notes, used instead of `notes`.
+    description: A file with the release notes, used instead of `notes`; only within the job that wrote it.
     default: ''
   files:
     description: Assets to attach, one glob per line; each must match a file.

@@ -118,6 +118,7 @@ jobs:
       - env:
           SKIPPED: ${{ steps.new.outputs.skipped }} ${{ steps.published.outputs.skipped }}
         run: test "$SKIPPED" = "false true"
+      - run: node tests/exchange.ts
 
   # Real releases of this repo under throwaway tags, deleted at the end.
   github-release:
@@ -128,6 +129,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       TAG: test-${{ github.run_id }}-${{ github.run_attempt }}
+      OTHER: v0.0.0-test-${{ github.run_id }}-${{ github.run_attempt }} # release-check's tags start with v
     steps:
       - uses: actions/checkout@v7
         with:
@@ -168,22 +170,42 @@ jobs:
           test "$(cat "dist/fix-$TAG-a.txt")" = one
           test "$(gh release view "$TAG" --json body,assets --jq '.body + "|" + ([.assets[].name] | sort | join(","))')" = "first|fix-$TAG-a.txt,fix-$TAG-b.txt"
 
-      - run: gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$TAG-other" -f "sha=$(git rev-parse HEAD^)"
+      # A release without assets (a library).
+      - uses: ./github-release
+        with:
+          tag: ${{ env.TAG }}-bare
+          notes: bare
+      - run: test "$(gh release view "$TAG-bare" --json body,assets --jq '.body + "|" + (.assets | length | tostring)')" = "bare|0"
+
+      # A tag left on another commit: both release-check and github-release refuse it.
+      - run: |
+          gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$OTHER" -f "sha=$(git rev-parse HEAD^)"
+          echo '{ "version": "'"${OTHER#v}"'" }' > "$RUNNER_TEMP/package.json"
+          printf '## %s\n\n- Changed\n' "$OTHER" > "$RUNNER_TEMP/changelog.md"
+      - id: check-other-commit
+        continue-on-error: true
+        uses: ./release-check
+        with:
+          manifest: ${{ runner.temp }}/package.json
+          changelog: ${{ runner.temp }}/changelog.md
+          message: 'release: ${{ env.OTHER }}'
       - id: other-commit
         continue-on-error: true
         uses: ./github-release
         with:
-          tag: ${{ env.TAG }}-other
+          tag: ${{ env.OTHER }}
+          notes: other
       - env:
-          OUTCOME: ${{ steps.other-commit.outcome }}
+          OUTCOMES: ${{ steps.check-other-commit.outcome }} ${{ steps.other-commit.outcome }}
         run: |
-          test "$OUTCOME" = failure
-          ! gh release view "$TAG-other"
+          test "$OUTCOMES" = "failure failure"
+          ! gh release view "$OTHER"
 
       - if: always()
         run: |
           gh release delete "$TAG" --cleanup-tag --yes || true
-          gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG-other" || true
+          gh release delete "$TAG-bare" --cleanup-tag --yes || true
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$OTHER" || true
 
   dev-release:
     if: github.event_name != 'pull_request'
@@ -205,7 +227,9 @@ jobs:
         with:
           tag: ${{ env.TAG }}
           files: dist/*
-      # Skipped when main moved on during the run; then there is nothing to check.
+      # Skipped only when main really moved on during the run; then there is nothing more to check.
+      - if: steps.first.outputs.skipped != 'false'
+        run: test "$(git ls-remote origin "$GITHUB_REF" | cut -f1)" != "$GITHUB_SHA"
       - if: steps.first.outputs.skipped == 'false'
         run: |
           test "$(git ls-remote origin "refs/tags/$TAG" | cut -f1)" = "$GITHUB_SHA"

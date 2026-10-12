@@ -1,4 +1,4 @@
-import { renameSync, writeFileSync } from 'node:fs'
+import { existsSync, renameSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { env, fail, files, input, main, required, setOutput } from '../lib/core.ts'
@@ -7,6 +7,15 @@ import { findRelease, gh, setTag, tagCommit } from '../lib/github.ts'
 await main(() => {
   const tag = required('tag')
   const sha = env('GITHUB_SHA')
+
+  let notesFile = input('notes-file')
+  if (!notesFile) {
+    if (!input('notes')) fail("set 'notes' (release-check's output) or 'notes-file'")
+    notesFile = join(process.env.RUNNER_TEMP || tmpdir(), `notes-${tag}.md`)
+    writeFileSync(notesFile, input('notes'))
+  } else if (!existsSync(notesFile)) {
+    fail(`no ${notesFile}: 'notes-file' works only in the job that wrote it; pass 'notes' instead`)
+  }
 
   const from = input('rename-from')
   const to = input('rename-to')
@@ -24,8 +33,6 @@ await main(() => {
 
   const release = findRelease(tag)
   if (!release) {
-    const notesFile = input('notes-file') || join(process.env.RUNNER_TEMP || tmpdir(), `notes-${tag}.md`)
-    if (!input('notes-file')) writeFileSync(notesFile, input('notes'))
     const title = input('title') || tag
     gh(['release', 'create', tag, ...paths, '--verify-tag', '--title', title, '--notes-file', notesFile], true)
   } else {

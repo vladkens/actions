@@ -1,7 +1,8 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fail, input, main, setOutput } from '../lib/core.ts'
+import { env, fail, input, logText, main, setOutput } from '../lib/core.ts'
+import { tagCommit } from '../lib/github.ts'
 import { MANIFESTS, manifestVersion } from '../lib/manifest.ts'
 import { changelogNotes, commitTitle, hasEntry } from './notes.ts'
 
@@ -21,6 +22,11 @@ await main(() => {
   const notes = changelogNotes(readFileSync(changelog, 'utf8'), tag)
   if (!hasEntry(notes)) fail(`${changelog} has no '## ${tag}' section with a '- ' entry`)
 
+  // Before anything is published: a tag left on another commit would fail the release after it.
+  const at = tagCommit(tag)
+  const sha = env('GITHUB_SHA')
+  if (at && at !== sha) fail(`tag ${tag} already points to ${at}, not ${sha}`)
+
   const notesFile = join(process.env.RUNNER_TEMP || tmpdir(), `notes-${tag}.md`)
   writeFileSync(notesFile, `${notes}\n`)
 
@@ -28,5 +34,6 @@ await main(() => {
   setOutput('version', version)
   setOutput('notes', notes)
   setOutput('notes-file', notesFile)
-  console.log(`release ${tag}, notes from ${changelog}:\n\n${notes}`)
+  console.log(`release ${tag}, notes from ${changelog}:\n`)
+  logText(notes)
 })
