@@ -261,3 +261,41 @@ jobs:
 
       - if: always()
         run: gh release delete "$TAG" --cleanup-tag --yes || true
+
+  # rust.yml's dist → dev-release path with a fake build. Its release path needs a release commit
+  # and is proven by the first release of a repo using it.
+  rust-workflow:
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/rust.yml
+    with:
+      dist: mkdir -p target/distrib && echo one > target/distrib/fixture-dev-a.txt
+      name: fixture
+      cache: false
+      crates: false
+      dev-tag: test-rust-${{ github.run_id }}-${{ github.run_attempt }}
+      dev-branch: ${{ github.ref_name }}
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+
+  rust-workflow-check:
+    needs: rust-workflow
+    if: ${{ !cancelled() && github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    permissions:
+      attestations: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: test-rust-${{ github.run_id }}-${{ github.run_attempt }}
+      RESULT: ${{ needs.rust-workflow.result }}
+    steps:
+      - run: |
+          test "$RESULT" = success
+          test "$(gh release view "$TAG" --json isPrerelease,assets --jq '"\(.isPrerelease)|" + ([.assets[].name] | join(","))')" = "true|fixture-dev-a.txt"
+          gh release download "$TAG" --pattern fixture-dev-a.txt
+          gh attestation verify fixture-dev-a.txt -R "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/rust.yml"
+      - if: always()
+        run: gh release delete "$TAG" --cleanup-tag --yes || true

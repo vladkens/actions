@@ -1,0 +1,158 @@
+name: rust
+
+# The release process of a Rust repo, called after its tests:
+#
+#   release:
+#     needs: test
+#     uses: vladkens/actions/.github/workflows/rust.yml@v1
+#     with: { dist: make dist, runner: macos-latest }
+#     permissions: { attestations: write, contents: write, id-token: write }
+#
+# Pushes to the default branch build the archives once and publish them as the rolling `dev`
+# pre-release; a squash-merged `release: vX.Y.Z (#N)` commit publishes the crate and the same
+# archives renamed to the version. Builds run read-only; the jobs that write don't build.
+# `$/` runs this repo's actions at the commit this workflow runs from.
+on:
+  workflow_call:
+    inputs:
+      dist:
+        description: Builds the archives into target/distrib, named `<name>-dev*`; empty for a crate without binaries.
+        type: string
+        default: ''
+      runner:
+        description: The runner for `dist`.
+        type: string
+        default: ubuntu-latest
+      name:
+        description: The archives' prefix; the repo's name when empty.
+        type: string
+        default: ''
+      cache:
+        description: Cache cargo's registry and target/ for `dist` (Swatinem/rust-cache).
+        type: boolean
+        default: true
+      cache-directories:
+        description: More directories for that cache, one per line (e.g. cross toolchains).
+        type: string
+        default: ''
+      crates:
+        description: Publish to crates.io (Trusted Publishing for the caller's workflow file).
+        type: boolean
+        default: true
+      dev-tag:
+        description: The rolling pre-release's tag.
+        type: string
+        default: dev
+      dev-branch:
+        description: The branch whose builds become the dev pre-release; the default branch when empty.
+        type: string
+        default: ''
+    outputs:
+      tag:
+        description: The released tag; empty when this run released nothing.
+        value: ${{ jobs.release.outputs.tag }}
+
+jobs:
+  dist:
+    if: inputs.dist != '' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ${{ inputs.runner }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - if: inputs.cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-directories: ${{ inputs.cache-directories }}
+      # The caller's own command, from its workflow file.
+      - run: ${{ inputs.dist }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: target/distrib/*
+          if-no-files-found: error
+
+  dev-release:
+    if: inputs.dist != '' && github.ref_name == (inputs.dev-branch || github.event.repository.default_branch)
+    needs: dist
+    runs-on: ubuntu-latest
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+    concurrency:
+      group: ${{ github.workflow }}-${{ inputs.dev-tag }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: target/distrib
+      - id: dev
+        uses: $/dev-release
+        with:
+          tag: ${{ inputs.dev-tag }}
+          files: target/distrib/*
+      # Signed by this workflow: `gh attestation verify FILE -R <repo> --signer-repo vladkens/actions`.
+      - if: steps.dev.outputs.skipped == 'false'
+        uses: actions/attest@v4
+        with:
+          subject-path: ${{ steps.dev.outputs.files }}
+
+  release-check:
+    if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.check.outputs.tag }}
+      notes: ${{ steps.check.outputs.notes }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: check
+        uses: $/release-check
+      - if: inputs.crates
+        uses: $/crates-publish
+        with:
+          dry-run: true
+
+  release:
+    needs: [dist, release-check]
+    if: ${{ !cancelled() && needs.release-check.result == 'success' && (needs.dist.result == 'success' || inputs.dist == '') }}
+    runs-on: ubuntu-latest
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write # crates.io Trusted Publishing and attestations
+    outputs:
+      tag: ${{ needs.release-check.outputs.tag }}
+    env:
+      NAME: ${{ inputs.name || github.event.repository.name }}
+      TAG: ${{ needs.release-check.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+      - if: inputs.dist != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: target/distrib # git-ignored, so cargo publish packs a clean tree
+      # https://crates.io/docs/trusted-publishing
+      - if: inputs.crates
+        id: auth
+        uses: rust-lang/crates-io-auth-action@v1
+      - if: inputs.crates
+        uses: $/crates-publish
+        with:
+          token: ${{ steps.auth.outputs.token }}
+          no-verify: true
+      - id: release
+        uses: $/github-release
+        with:
+          tag: ${{ env.TAG }}
+          notes: ${{ needs.release-check.outputs.notes }}
+          files: ${{ inputs.dist != '' && 'target/distrib/*' || '' }}
+          rename-from: ${{ env.NAME }}-dev
+          rename-to: ${{ env.NAME }}-${{ env.TAG }}
+      - if: inputs.dist != ''
+        uses: actions/attest@v4
+        with:
+          subject-path: ${{ steps.release.outputs.files }}

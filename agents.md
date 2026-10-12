@@ -1,9 +1,9 @@
 # actions
 
-Shared release steps for vladkens' repos, as GitHub Actions used like
-`vladkens/actions/release-check@v1`. Each repo keeps its own jobs (test, build) and its own
-`permissions:`, and calls these actions for the steps that are the same everywhere. Agents carry
-out each change end to end by following this file; plans live in `docs/plans/`.
+Shared release steps for vladkens' repos: GitHub Actions used like
+`vladkens/actions/release-check@v1`, and `.github/workflows/rust.yml`, a reusable workflow that
+runs a Rust repo's whole release process with them. Each repo keeps its own test jobs. Agents
+carry out each change end to end by following this file; plans live in `docs/plans/`.
 
 Each fact has one source: an action's inputs and outputs are its `action.yml`, its usage its
 `readme.md`, checks the `Makefile` and `.github/workflows/test.yml`.
@@ -20,8 +20,10 @@ Each fact has one source: an action's inputs and outputs are its `action.yml`, i
   `import type` for types. Shared code goes in `lib/`. Talk to GitHub through `gh` and `git`,
   both preinstalled on the hosted runners.
 - A JavaScript action can't call another action: steps that need an official one stay in the
-  caller's workflow (`actions/attest`, `rust-lang/crates-io-auth-action`) and pass their outputs
+  calling workflow (`actions/attest`, `rust-lang/crates-io-auth-action`) and pass their outputs
   in. Don't reimplement them.
+- `rust.yml` calls this repo's actions with `$/<action>`, so it always runs them at its own
+  commit. Its build job stays read-only; only the jobs that publish get write permissions.
 
 ## Code
 
