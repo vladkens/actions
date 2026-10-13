@@ -1,0 +1,115 @@
+name: rust-publish
+description: The writing half of a Rust release. Publishes rust-build's files as the dev pre-release, or a release commit to crates.io and GitHub. Never compiles.
+inputs:
+  files:
+    description: Expect release files from rust-build; `false` for a crate without binaries.
+    default: 'true'
+  crates:
+    description: Publish the crate to crates.io on a release commit (Trusted Publishing).
+    default: 'true'
+  dev:
+    description: Publish the default branch's files as the rolling dev pre-release.
+    default: 'true'
+  name:
+    description: The files' prefix, renamed from `<name>-dev` to `<name>-vX.Y.Z` on a release; the repo's name when empty.
+    default: ''
+  artifact:
+    description: The artifact rust-build uploaded.
+    default: release
+  dev-tag:
+    description: The dev pre-release's tag.
+    default: dev
+  dev-branch:
+    description: The branch whose pushes update the dev pre-release; the default branch when empty.
+    default: ''
+outputs:
+  tag:
+    description: The released tag; empty when this run released nothing.
+    value: ${{ steps.check.outputs.tag }}
+  files:
+    description: The published files' local paths, one per line.
+    value: ${{ steps.release.outputs.files || steps.dev.outputs.files }}
+runs:
+  using: composite
+  steps:
+    # Decided here from the event, never from the artifact: the build job's dependencies could
+    # have written anything into it.
+    - id: mode
+      name: Decide what to publish
+      shell: bash
+      env:
+        EVENT: ${{ github.event_name }}
+        MESSAGE: ${{ github.event.head_commit.message }}
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        DEV_BRANCH: ${{ inputs.dev-branch || github.event.repository.default_branch }}
+        DEV: ${{ inputs.dev }}
+        NAME: ${{ inputs.name || github.event.repository.name }}
+      run: |
+        mode=none
+        if [ "$EVENT" = push ] && [ "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH" ] && [[ "$MESSAGE" == release:* ]]; then
+          mode=release
+        elif [ "$DEV" = true ] && { [ "$EVENT" = push ] || [ "$EVENT" = workflow_dispatch ]; } && [ "$GITHUB_REF_NAME" = "$DEV_BRANCH" ]; then
+          mode=dev
+        fi
+        echo "mode=$mode" >> "$GITHUB_OUTPUT"
+        echo "name=$NAME" >> "$GITHUB_OUTPUT"
+        echo "rust-publish: $mode ($EVENT on $GITHUB_REF_NAME)"
+
+    - if: steps.mode.outputs.mode != 'none' && inputs.files == 'true'
+      uses: actions/download-artifact@v8
+      with:
+        name: ${{ inputs.artifact }}
+        path: target/distrib # git-ignored, so cargo publish packs a clean tree
+    - if: steps.mode.outputs.mode != 'none' && inputs.files == 'true'
+      name: Check the files
+      shell: bash
+      env:
+        PREFIX: ${{ steps.mode.outputs.name }}-dev
+      run: |
+        for f in target/distrib/* target/distrib/.[!.]*; do
+          [ -e "$f" ] || [ -L "$f" ] || continue
+          name=${f#target/distrib/}
+          if [ -L "$f" ] || [ ! -f "$f" ] || [[ "$name" != "$PREFIX"* ]]; then
+            echo "::error::unexpected '$name' in the release files: expected regular files named '$PREFIX*'"
+            exit 1
+          fi
+        done
+
+    # A release commit: crates.io, the tag and the GitHub release.
+    - id: check
+      if: steps.mode.outputs.mode == 'release'
+      uses: $/release-check
+    # https://crates.io/docs/trusted-publishing
+    - id: auth
+      if: steps.mode.outputs.mode == 'release' && inputs.crates == 'true'
+      uses: rust-lang/crates-io-auth-action@v1
+    - if: steps.mode.outputs.mode == 'release' && inputs.crates == 'true'
+      uses: $/crates-publish
+      with:
+        token: ${{ steps.auth.outputs.token }}
+        no-verify: true # rust-build ran the dry run; this job never compiles
+    - id: release
+      if: steps.mode.outputs.mode == 'release'
+      uses: $/github-release
+      with:
+        tag: ${{ steps.check.outputs.tag }}
+        notes: ${{ steps.check.outputs.notes }}
+        files: ${{ inputs.files == 'true' && 'target/distrib/*' || '' }}
+        rename-from: ${{ steps.mode.outputs.name }}-dev
+        rename-to: ${{ steps.mode.outputs.name }}-${{ steps.check.outputs.tag }}
+    - if: steps.mode.outputs.mode == 'release' && inputs.files == 'true'
+      uses: actions/attest@v4
+      with:
+        subject-path: ${{ steps.release.outputs.files }}
+
+    # Any other push to the dev branch: the rolling pre-release.
+    - id: dev
+      if: steps.mode.outputs.mode == 'dev' && inputs.files == 'true'
+      uses: $/dev-release
+      with:
+        tag: ${{ inputs.dev-tag }}
+        files: target/distrib/*
+    - if: steps.dev.outputs.skipped == 'false'
+      uses: actions/attest@v4
+      with:
+        subject-path: ${{ steps.dev.outputs.files }}

@@ -1,0 +1,55 @@
+name: rust-build
+description: The read-only half of a Rust release. Checks a release commit, builds the release files and uploads them for rust-publish.
+inputs:
+  dist:
+    description: Builds the release files into target/distrib, named `<name>-dev*`; empty for a crate without binaries.
+    default: ''
+  crates:
+    description: On a release commit, run `cargo publish --dry-run`.
+    default: 'true'
+  cache:
+    description: Cache cargo's registry and target/ (Swatinem/rust-cache).
+    default: 'true'
+  cache-directories:
+    description: More directories for that cache, one per line (e.g. cross toolchains).
+    default: ''
+  artifact:
+    description: The artifact name rust-publish downloads.
+    default: release
+runs:
+  using: composite
+  steps:
+    # Dependencies' build scripts run in this job: it must not be able to publish anything.
+    - name: Check the job is read-only
+      shell: bash
+      run: |
+        if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+          echo "::error::rust-build runs build scripts: give its job no 'id-token: write' (and no write permissions)"
+          exit 1
+        fi
+
+    - id: check
+      if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:')
+      uses: $/release-check
+    - if: steps.check.outcome == 'success' && inputs.crates == 'true'
+      uses: $/crates-publish
+      with:
+        dry-run: true
+
+    - if: inputs.dist != '' && inputs.cache == 'true'
+      uses: Swatinem/rust-cache@v2
+      with:
+        cache-directories: ${{ inputs.cache-directories }}
+    - if: inputs.dist != ''
+      name: Build the release files
+      shell: bash
+      env:
+        DIST: ${{ inputs.dist }}
+      run: eval "$DIST"
+    - if: inputs.dist != ''
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ inputs.artifact }}
+        path: target/distrib/*
+        if-no-files-found: error
+        overwrite: true
