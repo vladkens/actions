@@ -17,6 +17,6 @@ Checked from primary sources: composite actions call sibling actions at the same
       `dev` switches; outputs `tag`, `files`.
 - [x] test.yml: build → publish dev path under a throwaway tag, `gh attestation verify -R` with
       no signer flags, the write-job refusal and the file-name check.
-- [ ] Green on the branch, then wavo's PR #40 on them and its comments.
+- [x] Green on the branch, then wavo's PR #40 on them and its comments.
 - [ ] The release path proven by wavo's first release through them.
 - Later, when a repo needs them: build matrices (lalo), Homebrew, macOS signing.

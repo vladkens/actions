@@ -39,9 +39,10 @@ jobs:
   test:
     # ...
 
-  # Read-only: dependencies' build scripts run here. Beside `test`, on pushes only.
+  # Read-only: dependencies' build scripts run here, so no `permissions:` beyond the top-level
+  # `contents: read`. Beside `test`, on the default branch only.
   build:
-    if: github.event_name != 'pull_request'
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
@@ -68,7 +69,8 @@ jobs:
   `<name>-vX.Y.Z` (`<name>` is the repo's name unless set); the next push updates `dev`.
 - rust-publish decides what to publish from the event and the commit, never from the artifact,
   and refuses files not named `<name>-dev*`. It does nothing on pull requests or other branches.
-- rust-build fails in a job with `id-token: write`: keep write permissions to the publish job.
+- rust-build fails in a job with `id-token: write`; it can't see `contents: write`, so keep every
+  write permission to the publish job.
 - Inputs: `rust-build/action.yml`, `rust-publish/action.yml`. A crate without binaries drops
   `dist` and sets `files: false` on rust-publish; `crates: false` skips crates.io, `dev: false`
   the pre-release. Output `tag` is the released tag, empty otherwise, for steps after it (a
