@@ -1,9 +1,9 @@
 # actions
 
 Shared release steps for vladkens' repos, as GitHub Actions used like
-`vladkens/actions/release-check@v1`. Each repo keeps its own jobs (test, build) and its own
-`permissions:`, and calls these actions for the steps that are the same everywhere. Agents carry
-out each change end to end by following this file; plans live in `docs/plans/`.
+`vladkens/actions/rust-build@v1`. A Rust repo's release is two of them, rust-build and
+rust-publish, built from the smaller ones here. Each repo keeps its own test jobs. Agents
+carry out each change end to end by following this file; plans live in `docs/plans/`.
 
 Each fact has one source: an action's inputs and outputs are its `action.yml`, its usage its
 `readme.md`, checks the `Makefile` and `.github/workflows/test.yml`.
@@ -20,8 +20,11 @@ Each fact has one source: an action's inputs and outputs are its `action.yml`, i
   `import type` for types. Shared code goes in `lib/`. Talk to GitHub through `gh` and `git`,
   both preinstalled on the hosted runners.
 - A JavaScript action can't call another action: steps that need an official one stay in the
-  caller's workflow (`actions/attest`, `rust-lang/crates-io-auth-action`) and pass their outputs
+  calling workflow (`actions/attest`, `rust-lang/crates-io-auth-action`) and pass their outputs
   in. Don't reimplement them.
+- Composite actions call this repo's actions with `$/<action>`, so all run at one commit.
+  rust-build runs build scripts and must stay read-only; rust-publish writes and must never
+  compile, and trusts nothing from the build's artifact but the files' bytes.
 
 ## Code
 

@@ -1,11 +1,14 @@
 # actions
 
-Shared release steps for vladkens' repos, as GitHub Actions. A repo's workflow keeps its own jobs
-(test, build), `permissions:` and specifics (asset sets, Docker, Homebrew), and calls these for
-the steps that are the same everywhere.
+Shared release steps for vladkens' repos, as GitHub Actions. A Rust repo uses two of them:
+[rust-build](#a-rust-repo) and [rust-publish](#a-rust-repo) hide the whole release process;
+the others are their building blocks, usable on their own. A repo keeps its own test jobs and
+specifics (Docker, Homebrew).
 
 | Action | Does |
 | --- | --- |
+| rust-build | Read-only: checks a release commit, builds the release files, uploads them |
+| rust-publish | Writes, never compiles: the dev pre-release, or crates.io + tag + GitHub release |
 | [release-check](release-check/readme.md) | `release: vX.Y.Z` commit title = manifest version; notes from `changelog.md` |
 | [github-release](github-release/readme.md) | Tag, GitHub release, assets; a re-run uploads only what is missing |
 | [dev-release](dev-release/readme.md) | Rolling `dev` pre-release with the latest build's assets |
@@ -13,11 +16,12 @@ the steps that are the same everywhere.
 
 Use them as `vladkens/actions/<action>@v1`. `v1` moves to each compatible release.
 
-Each action is a Node 24 JavaScript action run from its TypeScript source: no build step and no
-dependencies on the runner. They talk to GitHub through `gh`, preinstalled on the hosted Ubuntu
-and macOS runners, with the job's `GITHUB_TOKEN` by default. An action can't call another
-action, so the repo's workflow keeps the steps that use official ones: `actions/attest` for
-attestations and `rust-lang/crates-io-auth-action` for the crates.io token.
+The building blocks are Node 24 JavaScript actions run from their TypeScript source: no build step
+and no dependencies on the runner. They talk to GitHub through `gh`, preinstalled on the hosted
+Ubuntu and macOS runners, with the job's `GITHUB_TOKEN` by default. rust-build and rust-publish
+are composite actions that chain them with the official `actions/attest` and
+`rust-lang/crates-io-auth-action`, calling this repo's actions through `$/` so all run at the same
+commit.
 
 ## Releasing
 
@@ -28,122 +32,55 @@ attestations and `rust-lang/crates-io-auth-action` for the crates.io token.
    No one pushes tags by hand.
 3. A failed run is fixed by re-running it: every step skips what is already done.
 
-## A Rust repo's workflow
-
-wavo's shape: `dev` builds the archives once (`<name>-dev-<target>.tar.gz`); main pushes publish
-them as the `dev` pre-release, and a release commit publishes the same archives renamed to the
-version. Builds run without write rights; the jobs that write don't build.
+## A Rust repo
 
 ```yaml
-name: main
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-  workflow_dispatch:
-
-permissions:
-  contents: read
-
-# Main runs queue instead, so a dev release is never cut off; a release commit gets its own group.
-concurrency:
-  group: ${{ github.workflow }}-${{ startsWith(github.event.head_commit.message, 'release:') && github.sha || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
 jobs:
   test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - run: make check test
+    # ...
 
-  dev:
+  # Read-only: dependencies' build scripts run here, so no `permissions:` beyond the top-level
+  # `contents: read`. Beside `test`, on the default branch only.
+  build:
     if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
-      - run: make dist # writes target/distrib/wavo-dev-<target>.tar.gz
-      - uses: actions/upload-artifact@v7
+      - uses: vladkens/actions/rust-build@v1
         with:
-          name: dist
-          path: target/distrib/*
+          dist: make dist # writes target/distrib/<name>-dev*; omit for a crate without binaries
+          cache-directories: ~/.cache/cargo-cross
 
-  dev-release:
-    if: github.ref == 'refs/heads/main'
-    needs: [test, dev]
+  # Writes, never compiles.
+  publish:
+    needs: [test, build]
     runs-on: ubuntu-latest
     permissions:
       attestations: write
       contents: write
       id-token: write
-    concurrency:
-      group: dev-release
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          name: dist
-          path: target/distrib
-      - id: dev
-        uses: vladkens/actions/dev-release@v1
-        with:
-          files: target/distrib/*
-      # Users check an archive with `gh attestation verify FILE -R vladkens/wavo`.
-      - if: steps.dev.outputs.skipped == 'false'
-        uses: actions/attest@v4
-        with:
-          subject-path: ${{ steps.dev.outputs.files }}
-
-  release-check:
-    if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:')
-    runs-on: ubuntu-latest
-    outputs:
-      tag: ${{ steps.check.outputs.tag }}
-      notes: ${{ steps.check.outputs.notes }}
     steps:
       - uses: actions/checkout@v7
-      - id: check
-        uses: vladkens/actions/release-check@v1
-      - uses: vladkens/actions/crates-publish@v1
-        with:
-          dry-run: true
-
-  release:
-    needs: [test, dev, release-check]
-    runs-on: ubuntu-latest
-    permissions:
-      attestations: write
-      contents: write
-      id-token: write # crates.io Trusted Publishing and attestations
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v8
-        with:
-          name: dist
-          path: target/distrib # git-ignored, so cargo publish packs a clean tree
-      # https://crates.io/docs/trusted-publishing
-      - id: auth
-        uses: rust-lang/crates-io-auth-action@v1
-      - uses: vladkens/actions/crates-publish@v1
-        with:
-          token: ${{ steps.auth.outputs.token }}
-          no-verify: true
-      - id: release
-        uses: vladkens/actions/github-release@v1
-        with:
-          tag: ${{ needs.release-check.outputs.tag }}
-          notes: ${{ needs.release-check.outputs.notes }}
-          files: target/distrib/*
-          rename-from: wavo-dev-
-          rename-to: wavo-${{ needs.release-check.outputs.tag }}-
-      - uses: actions/attest@v4
-        with:
-          subject-path: ${{ steps.release.outputs.files }}
+      - uses: vladkens/actions/rust-publish@v1
 ```
 
-A repo without binaries drops `dev`, `dev-release`, the download and `files`; a repo that builds
-its release archive in the `release` job builds before `github-release` and passes that
-file.
+- A push to the default branch publishes the files as the `dev` pre-release. A release commit
+  publishes the crate and creates the release with the same files renamed from `<name>-dev` to
+  `<name>-vX.Y.Z` (`<name>` is the repo's name unless set); the next push updates `dev`.
+- rust-publish decides what to publish from the event and the commit, never from the artifact,
+  and refuses files not named `<name>-dev*`. It does nothing on pull requests or other branches.
+- rust-build fails in a job with `id-token: write`; it can't see `contents: write`, so keep every
+  write permission to the publish job.
+- Inputs: `rust-build/action.yml`, `rust-publish/action.yml`. A crate without binaries drops
+  `dist` and sets `files: false` on rust-publish; `crates: false` skips crates.io, `dev: false`
+  the pre-release. Output `tag` is the released tag, empty otherwise, for steps after it (a
+  Homebrew formula, say).
+- Keep the workflow's `concurrency` queueing default-branch runs (not cancelling them), so two
+  dev updates don't overlap.
+- crates.io's Trusted Publishing settings name the repo's workflow file (e.g. `main.yml`), and
+  attestations verify with `gh attestation verify FILE -R <owner>/<repo>`.
+- `GITHUB_TOKEN` can't create a tag on a commit whose `.github/workflows` differ from the default
+  branch (it has no `workflows` permission): keep workflow edits out of release PRs.
 
 ## Development
 

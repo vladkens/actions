@@ -261,3 +261,81 @@ jobs:
 
       - if: always()
         run: gh release delete "$TAG" --cleanup-tag --yes || true
+
+  # rust-build → rust-publish with a fake build, as a repo's workflow uses them: the dev path,
+  # published under a throwaway tag. The release path needs a release commit and is proven by the
+  # first release of a repo using them.
+  rust-build:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./rust-build
+        with:
+          dist: mkdir -p target/distrib && echo one > target/distrib/fixture-dev-a.txt
+          cache: false
+          artifact: release-test
+
+  # rust-build must refuse a job that could publish.
+  rust-build-write:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - id: build
+        continue-on-error: true
+        uses: ./rust-build
+        with:
+          dist: mkdir -p target/distrib && echo one > target/distrib/fixture-dev-a.txt
+          artifact: release-test-write
+      - env:
+          OUTCOME: ${{ steps.build.outcome }}
+        run: test "$OUTCOME" = failure
+
+  rust-publish:
+    needs: rust-build
+    runs-on: ubuntu-latest
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: test-publish-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v7
+      # Files not named `<name>-dev*` are refused before anything is published.
+      - id: wrong-name
+        continue-on-error: true
+        uses: ./rust-publish
+        with:
+          name: other
+          crates: false
+          artifact: release-test
+          dev-tag: ${{ env.TAG }}
+          dev-branch: ${{ github.ref_name }}
+      - id: publish
+        uses: ./rust-publish
+        with:
+          name: fixture
+          crates: false
+          artifact: release-test
+          dev-tag: ${{ env.TAG }}
+          dev-branch: ${{ github.ref_name }}
+      - env:
+          WRONG: ${{ steps.wrong-name.outcome }}
+          FILES: ${{ steps.publish.outputs.files }}
+          RELEASED: ${{ steps.publish.outputs.tag }}
+        run: |
+          test "$WRONG" = failure
+          test "$FILES" = target/distrib/fixture-dev-a.txt
+          test -z "$RELEASED"
+          test "$(gh release view "$TAG" --json isPrerelease,assets --jq '"\(.isPrerelease)|" + ([.assets[].name] | join(","))')" = "true|fixture-dev-a.txt"
+          # Signed by this repo's own workflow: no signer flags needed.
+          gh release download "$TAG" --pattern fixture-dev-a.txt --dir "$RUNNER_TEMP"
+          gh attestation verify "$RUNNER_TEMP/fixture-dev-a.txt" -R "$GITHUB_REPOSITORY"
+      - if: always()
+        run: gh release delete "$TAG" --cleanup-tag --yes || true
