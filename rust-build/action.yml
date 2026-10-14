@@ -7,6 +7,9 @@ inputs:
   crates:
     description: On a release commit, run `cargo publish --dry-run`.
     default: 'true'
+  dev-version:
+    description: Outside release commits, build with the version `git describe` gives (e.g. 0.9.0-12-g3672a1b).
+    default: 'true'
   cache:
     description: Cache cargo's registry and target/ (Swatinem/rust-cache).
     default: 'true'
@@ -40,6 +43,10 @@ runs:
       uses: Swatinem/rust-cache@v2
       with:
         cache-directories: ${{ inputs.cache-directories }}
+    # After the cache, whose key hashes Cargo.lock. A release keeps its plain version: its files
+    # are published as they are.
+    - if: inputs.dist != '' && inputs.dev-version == 'true' && steps.check.outcome == 'skipped'
+      uses: $/dev-version
     - if: inputs.dist != ''
       name: Build the release files
       shell: bash

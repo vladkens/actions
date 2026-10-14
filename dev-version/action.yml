@@ -1,0 +1,12 @@
+name: dev-version
+description: Set a non-release build's package version to `git describe` (e.g. 0.9.0-12-g3672a1b) in Cargo.toml and Cargo.lock.
+inputs:
+  manifest-path:
+    description: The package's Cargo.toml.
+    default: Cargo.toml
+outputs:
+  version:
+    description: The version the build reports.
+runs:
+  using: node24
+  main: index.ts

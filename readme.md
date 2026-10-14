@@ -13,6 +13,7 @@ specifics (Docker, Homebrew).
 | [github-release](github-release/readme.md) | Tag, GitHub release, assets; a re-run uploads only what is missing |
 | [dev-release](dev-release/readme.md) | Rolling `dev` pre-release with the latest build's assets |
 | [crates-publish](crates-publish/readme.md) | `cargo publish`; skips a version already on crates.io |
+| dev-version | Non-release builds report `git describe`'s version (e.g. `0.9.0-12-g3672a1b`) |
 
 Use them as `vladkens/actions/<action>@v1`. `v1` moves to each compatible release.
 
@@ -67,6 +68,10 @@ jobs:
 - A push to the default branch publishes the files as the `dev` pre-release. A release commit
   publishes the crate and creates the release with the same files renamed from `<name>-dev` to
   `<name>-vX.Y.Z` (`<name>` is the repo's name unless set); the next push updates `dev`.
+- Outside release commits rust-build first sets the package version in Cargo.toml and Cargo.lock
+  to `git describe` against the last `vX.Y.Z` tag (`0.9.0-12-g3672a1b`: 12 commits after
+  v0.9.0), so dev builds say what they are; a release builds its plain version.
+  `dev-version: false` turns it off.
 - rust-publish decides what to publish from the event and the commit, never from the artifact,
   and refuses files not named `<name>-dev*`. It does nothing on pull requests or other branches.
 - rust-build fails in a job with `id-token: write`; it can't see `contents: write`, so keep every

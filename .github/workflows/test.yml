@@ -274,7 +274,25 @@ jobs:
         with:
           dist: mkdir -p target/distrib && echo one > target/distrib/fixture-dev-a.txt
           cache: false
+          dev-version: false # no Cargo.toml at this repo's root; dev-version is tested below
           artifact: release-test
+
+  # A non-release build's version from `git describe` against this repo's vX.Y.Z tags.
+  dev-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - id: stamp
+        uses: ./dev-version
+        with:
+          manifest-path: tests/fixtures/crate/Cargo.toml
+      - env:
+          VERSION: ${{ steps.stamp.outputs.version }}
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-[0-9]+-g[0-9a-f]+$ ]]
+          grep -qx "version = \"$VERSION\"" tests/fixtures/crate/Cargo.toml
+          grep -qx "version = \"$VERSION\"" tests/fixtures/crate/Cargo.lock
+          cargo build --locked --manifest-path tests/fixtures/crate/Cargo.toml
 
   # rust-build must refuse a job that could publish.
   rust-build-write:
