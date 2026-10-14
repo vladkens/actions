@@ -78,7 +78,8 @@ jobs:
 - Keep the workflow's `concurrency` queueing default-branch runs (not cancelling them), so two
   dev updates don't overlap.
 - crates.io's Trusted Publishing settings name the repo's workflow file (e.g. `main.yml`), and
-  attestations verify with `gh attestation verify FILE -R <owner>/<repo>`.
+  attestations verify with `gh attestation verify FILE -R <owner>/<repo>`. A private repo gets no
+  attestations: GitHub offers them there only on Enterprise Cloud.
 - `GITHUB_TOKEN` can't create a tag on a commit whose `.github/workflows` differ from the default
   branch (it has no `workflows` permission): keep workflow edits out of release PRs.
 

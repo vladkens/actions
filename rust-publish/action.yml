@@ -44,6 +44,7 @@ runs:
         DEV_BRANCH: ${{ inputs.dev-branch || github.event.repository.default_branch }}
         DEV: ${{ inputs.dev }}
         NAME: ${{ inputs.name || github.event.repository.name }}
+        PRIVATE: ${{ github.event.repository.private }}
       run: |
         mode=none
         if [ "$EVENT" = push ] && [ "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH" ] && [[ "$MESSAGE" == release:* ]]; then
@@ -54,6 +55,9 @@ runs:
         echo "mode=$mode" >> "$GITHUB_OUTPUT"
         echo "name=$NAME" >> "$GITHUB_OUTPUT"
         echo "rust-publish: $mode ($EVENT on $GITHUB_REF_NAME)"
+        if [ "$mode" != none ] && [ "$PRIVATE" = true ]; then
+          echo "::notice::private repo: no attestations (GitHub offers them there only on Enterprise Cloud)"
+        fi
 
     - if: steps.mode.outputs.mode != 'none' && inputs.files == 'true'
       uses: actions/download-artifact@v8
@@ -97,7 +101,8 @@ runs:
         files: ${{ inputs.files == 'true' && 'target/distrib/*' || '' }}
         rename-from: ${{ steps.mode.outputs.name }}-dev
         rename-to: ${{ steps.mode.outputs.name }}-${{ steps.check.outputs.tag }}
-    - if: steps.mode.outputs.mode == 'release' && inputs.files == 'true'
+    # Attestations need a public repo (or Enterprise Cloud): a private one skips them.
+    - if: steps.mode.outputs.mode == 'release' && inputs.files == 'true' && !github.event.repository.private
       uses: actions/attest@v4
       with:
         subject-path: ${{ steps.release.outputs.files }}
@@ -109,7 +114,7 @@ runs:
       with:
         tag: ${{ inputs.dev-tag }}
         files: target/distrib/*
-    - if: steps.dev.outputs.skipped == 'false'
+    - if: steps.dev.outputs.skipped == 'false' && !github.event.repository.private
       uses: actions/attest@v4
       with:
         subject-path: ${{ steps.dev.outputs.files }}
