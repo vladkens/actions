@@ -14,6 +14,7 @@ specifics (Docker, Homebrew).
 | [dev-release](dev-release/readme.md) | Rolling `dev` pre-release with the latest build's assets |
 | [crates-publish](crates-publish/readme.md) | `cargo publish`; skips a version already on crates.io |
 | dev-version | Non-release builds report `git describe`'s version (e.g. `0.9.0-12-g3672a1b`) |
+| homebrew-bump | Points a tap's formula at the release's archive; nothing without a release |
 
 Use them as `vladkens/actions/<action>@v1`. `v1` moves to each compatible release.
 
@@ -82,6 +83,20 @@ jobs:
   Homebrew formula, say).
 - Keep the workflow's `concurrency` queueing default-branch runs (not cancelling them), so two
   dev updates don't overlap.
+- A Homebrew formula follows a release with one more step in `publish`, after
+  `- id: release` `uses: vladkens/actions/rust-publish@v1`:
+
+  ```yaml
+      - uses: vladkens/actions/homebrew-bump@v1
+        with:
+          tag: ${{ steps.release.outputs.tag }} # empty unless released: then it does nothing
+          file: ${{ steps.release.outputs.files }} # the one archive the formula downloads
+          tap: vladkens/homebrew-tap
+          token: ${{ secrets.HOMEBREW_REPO_TOKEN }} # can push to the tap
+  ```
+
+  It sets the formula's (`<repo>.rb`, or `formula`) `url`, `sha256` and `version` from the
+  published archive and pushes as github-actions[bot]; formulas with one download only.
 - crates.io's Trusted Publishing settings name the repo's workflow file (e.g. `main.yml`), and
   attestations verify with `gh attestation verify FILE -R <owner>/<repo>`. A private repo gets no
   attestations: GitHub offers them there only on Enterprise Cloud.

@@ -55,6 +55,10 @@ export function setOutput(name: string, value: string): void {
   appendFileSync(env('GITHUB_OUTPUT'), `${name}<<${delimiter}\n${value}\n${delimiter}\n`)
 }
 
+export function mask(secret: string): void {
+  console.log(`::add-mask::${escape(secret)}`)
+}
+
 export function notice(message: string): void {
   console.log(`::notice::${escape(message)}`)
 }

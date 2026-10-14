@@ -357,3 +357,48 @@ jobs:
           gh attestation verify "$RUNNER_TEMP/fixture-dev-a.txt" -R "$GITHUB_REPOSITORY"
       - if: always()
         run: gh release delete "$TAG" --cleanup-tag --yes || true
+
+  # homebrew-bump against a local bare tap: a first run commits url/version/sha256, a second
+  # changes nothing, and no tag means no work.
+  homebrew-bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: |
+          git init --quiet --bare -b main "$RUNNER_TEMP/tap.git"
+          git init --quiet -b main "$RUNNER_TEMP/seed"
+          printf 'class Fixture < Formula\n  url "https://x/fixture-v0.0.1.tar.gz"\n  version "0.0.1"\n  sha256 "aaaa"\nend\n' > "$RUNNER_TEMP/seed/fixture.rb"
+          git -C "$RUNNER_TEMP/seed" add fixture.rb
+          git -C "$RUNNER_TEMP/seed" -c user.name=t -c user.email=t@t commit --quiet -m init
+          git -C "$RUNNER_TEMP/seed" push --quiet "$RUNNER_TEMP/tap.git" main
+          echo archive > "$RUNNER_TEMP/fixture-v1.2.3.tar.gz"
+      - id: none
+        uses: ./homebrew-bump
+        with:
+          tap: file://${{ runner.temp }}/tap.git
+          token: unused
+      - id: first
+        uses: ./homebrew-bump
+        with:
+          tag: v1.2.3
+          file: ${{ runner.temp }}/fixture-v1.2.3.tar.gz
+          tap: file://${{ runner.temp }}/tap.git
+          formula: fixture.rb
+          token: unused
+      - id: again
+        uses: ./homebrew-bump
+        with:
+          tag: v1.2.3
+          file: ${{ runner.temp }}/fixture-v1.2.3.tar.gz
+          tap: file://${{ runner.temp }}/tap.git
+          formula: fixture.rb
+          token: unused
+      - env:
+          CHANGED: ${{ steps.none.outputs.changed }} ${{ steps.first.outputs.changed }} ${{ steps.again.outputs.changed }}
+        run: |
+          test "$CHANGED" = "false true false"
+          formula=$(git --git-dir="$RUNNER_TEMP/tap.git" show main:fixture.rb)
+          grep -qx '  version "1.2.3"' <<< "$formula"
+          grep -qx "  url \"https://github.com/$GITHUB_REPOSITORY/releases/download/v1.2.3/fixture-v1.2.3.tar.gz\"" <<< "$formula"
+          grep -qx "  sha256 \"$(sha256sum "$RUNNER_TEMP/fixture-v1.2.3.tar.gz" | cut -d' ' -f1)\"" <<< "$formula"
+          test "$(git --git-dir="$RUNNER_TEMP/tap.git" log -1 --format='%an | %s')" = "github-actions[bot] | fixture v1.2.3"
