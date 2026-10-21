@@ -59,19 +59,24 @@ runs:
           echo "::notice::private repo: no attestations (GitHub offers them there only on Enterprise Cloud)"
         fi
 
-    # A dev pre-release needs rust-build's `dev: true`: without it there are no files to publish.
     - id: download
       if: steps.mode.outputs.mode != 'none' && inputs.files == 'true'
-      continue-on-error: ${{ steps.mode.outputs.mode == 'dev' }}
       uses: actions/download-artifact@v8
       with:
         name: ${{ inputs.artifact }}
         path: target/distrib # git-ignored, so cargo publish packs a clean tree
-    - if: steps.mode.outputs.mode == 'dev' && steps.download.outcome == 'failure'
+    # rust-build without `dev: true` builds nothing outside release commits and leaves a marker.
+    - id: built
+      if: steps.download.outcome == 'success'
       shell: bash
       run: |
-        echo "no dev build in this run (rust-build's dev input is off): no dev pre-release"
-    - if: steps.download.outcome == 'success'
+        if [ -e target/distrib/no-dev-build ]; then
+          echo "no dev build in this run (rust-build's dev is off): no dev pre-release"
+          echo "files=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "files=true" >> "$GITHUB_OUTPUT"
+        fi
+    - if: steps.built.outputs.files == 'true'
       name: Check the files
       shell: bash
       env:
@@ -116,7 +121,7 @@ runs:
 
     # Any other push to the dev branch: the rolling pre-release.
     - id: dev
-      if: steps.mode.outputs.mode == 'dev' && steps.download.outcome == 'success'
+      if: steps.mode.outputs.mode == 'dev' && steps.built.outputs.files == 'true'
       uses: $/dev-release
       with:
         tag: ${{ inputs.dev-tag }}

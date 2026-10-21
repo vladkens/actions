@@ -64,9 +64,13 @@ runs:
         if [ "$FILES" = true ] && { [ "$RELEASE" = true ] || [ "$DEV" = true ] || [ "$EVENT" = workflow_dispatch ]; }; then
           build=true
         elif [ "$FILES" = true ]; then
+          # Tells rust-publish there is nothing to put up, so it skips the dev pre-release quietly.
           echo "no release files on this push: not a release commit, and dev is off"
+          mkdir -p target/distrib
+          : > target/distrib/no-dev-build
         fi
         echo "build=$build" >> "$GITHUB_OUTPUT"
+        echo "files=$FILES" >> "$GITHUB_OUTPUT"
 
     - if: steps.plan.outputs.build == 'true' && inputs.cache == 'true'
       uses: Swatinem/rust-cache@v2
@@ -90,7 +94,7 @@ runs:
       env:
         DIST: ${{ inputs.dist }}
       run: eval "$DIST"
-    - if: steps.plan.outputs.build == 'true'
+    - if: steps.plan.outputs.files == 'true'
       uses: actions/upload-artifact@v7
       with:
         name: ${{ inputs.artifact }}
