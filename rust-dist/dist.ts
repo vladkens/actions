@@ -19,3 +19,8 @@ export function archiveName(name: string, target: string): string {
 export function isShipped(file: string): boolean {
   return /^readme(\.md)?$/i.test(file) || /^(licen[cs]e|copying)([.-]|$)/i.test(file)
 }
+
+// The directory cargo builds a profile into: `dev` builds into `debug`.
+export function profileDir(profile: string): string {
+  return profile === 'dev' ? 'debug' : profile
+}

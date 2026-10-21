@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { archiveName, isApple, isShipped, parseTargets } from '../rust-dist/dist.ts'
+import { archiveName, isApple, isShipped, parseTargets, profileDir } from '../rust-dist/dist.ts'
 
 test('targets from spaces, commas and lines', () => {
   assert.deepEqual(parseTargets(' a-apple-darwin, b-unknown-linux-gnu\nc-pc-windows-gnu '), [
@@ -21,4 +21,10 @@ test('archive names', () => {
 test('shipped files: the readme and license files only', () => {
   const files = ['readme.md', 'README.md', 'LICENSE', 'LICENSE-MIT', 'license.txt', 'COPYING', 'Cargo.toml', 'readme-old.md', 'licenses']
   assert.deepEqual(files.filter(isShipped), ['readme.md', 'README.md', 'LICENSE', 'LICENSE-MIT', 'license.txt', 'COPYING'])
+})
+
+test('profile directories', () => {
+  assert.equal(profileDir('release'), 'release')
+  assert.equal(profileDir('dist'), 'dist')
+  assert.equal(profileDir('dev'), 'debug')
 })

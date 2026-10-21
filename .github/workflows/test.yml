@@ -412,6 +412,7 @@ jobs:
         uses: ./rust-dist
         with:
           targets: aarch64-apple-darwin x86_64-unknown-linux-gnu
+          profile: dist # with debug info: the macOS archive gets fixture-bin.dSYM
           name: fixture
           working-directory: tests/fixtures/bin
       - working-directory: tests/fixtures/bin
@@ -419,7 +420,11 @@ jobs:
           FILES: ${{ steps.dist.outputs.files }}
         run: |
           test "$FILES" = "$(printf 'target/distrib/fixture-dev-aarch64-apple-darwin.tar.gz\ntarget/distrib/fixture-dev-x86_64-unknown-linux-gnu.tar.gz')"
-          for f in $FILES; do test "$(tar tzf "$f" | sort | tr '\n' ' ')" = "fixture-bin readme.md "; done
+          test "$(tar tzf target/distrib/fixture-dev-x86_64-unknown-linux-gnu.tar.gz | sort | tr '\n' ' ')" = "fixture-bin readme.md "
+          mac=$(tar tzf target/distrib/fixture-dev-aarch64-apple-darwin.tar.gz)
+          grep -qx fixture-bin <<< "$mac"
+          grep -qx readme.md <<< "$mac"
+          grep -q '^fixture-bin.dSYM/Contents/Resources/DWARF/' <<< "$mac"
           mkdir unpacked
           tar xzf target/distrib/fixture-dev-x86_64-unknown-linux-gnu.tar.gz -C unpacked
           file unpacked/fixture-bin | grep -q 'ELF 64-bit.*x86-64'

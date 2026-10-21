@@ -80,7 +80,8 @@ jobs:
 - `targets` builds the binaries (Apple ones on the Mac, Linux and Windows through
   [cargo-cross](https://github.com/zijiren233/cargo-cross), glibc 2.28) into
   `<name>-dev-<target>.tar.gz` (`.zip` for Windows) with the readme and license; no Makefile target
-  needed. `dist: <command>` replaces it when a repo ships something else (wavo's dSYM).
+  needed. `profile: dist` builds another cargo profile; with debug info the macOS archives also
+  get `<bin>.dSYM`. `dist: <command>` replaces it all when a repo ships something else.
 - Inputs: `rust-build/action.yml`, `rust-publish/action.yml`. A crate without binaries drops
   `targets` and sets `files: false` on rust-publish; `crates: false` skips crates.io, `dev: false`
   the pre-release. Output `tag` is the released tag, empty otherwise, for steps after it (a

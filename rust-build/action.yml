@@ -7,6 +7,9 @@ inputs:
   name:
     description: The archives' prefix; the repo's name when empty.
     default: ''
+  profile:
+    description: The cargo profile `targets` builds; with debug info Apple targets also ship `<bin>.dSYM`.
+    default: release
   dist:
     description: Instead of `targets`, a command that builds the release files into target/distrib, named `<name>-dev*`.
     default: ''
@@ -60,6 +63,7 @@ runs:
       with:
         targets: ${{ inputs.targets }}
         name: ${{ inputs.name }}
+        profile: ${{ inputs.profile }}
     - if: inputs.targets == '' && inputs.dist != ''
       name: Build the release files
       shell: bash

@@ -4,6 +4,9 @@ inputs:
   targets:
     description: Rust targets, e.g. `aarch64-apple-darwin x86_64-unknown-linux-gnu x86_64-pc-windows-gnu`. Apple ones need a macOS runner.
     required: true
+  profile:
+    description: The cargo profile to build; with debug info it also ships `<bin>.dSYM` for Apple targets.
+    default: release
   name:
     description: The archives' prefix, `<name>-dev-<target>`; the repo's name when empty.
     default: ''
