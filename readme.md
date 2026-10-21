@@ -37,6 +37,9 @@ commit.
 2. CI on that push checks it, publishes the package and creates the tag and the GitHub release.
    No one pushes tags by hand.
 3. A failed run is fixed by re-running it: every step skips what is already done.
+4. Only the repo owner releases (rust-publish's and py-publish's `releasers`, logins separated by
+   spaces or commas): a release commit merged by anyone else fails before anything is published,
+   and the owner re-runs that run to release it. Collaborators merge other PRs as usual.
 
 ## A Rust repo
 

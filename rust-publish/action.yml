@@ -13,6 +13,9 @@ inputs:
   name:
     description: The files' prefix, renamed from `<name>-dev` to `<name>-vX.Y.Z` on a release; the repo's name when empty.
     default: ''
+  releasers:
+    description: GitHub logins allowed to release, separated by spaces or commas. A release commit merged by anyone else fails before anything is published; one of them re-runs it.
+    default: ${{ github.repository_owner }}
   artifact:
     description: The artifact rust-build uploaded.
     default: release
@@ -95,6 +98,8 @@ runs:
     - id: check
       if: steps.mode.outputs.mode == 'release'
       uses: $/release-check
+      with:
+        releasers: ${{ inputs.releasers }}
     # https://crates.io/docs/trusted-publishing
     - id: auth
       if: steps.mode.outputs.mode == 'release' && inputs.crates == 'true'

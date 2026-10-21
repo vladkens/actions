@@ -10,6 +10,12 @@ inputs:
   message:
     description: "The commit message whose first line must be `release: vX.Y.Z`, optionally with ` (#N)`."
     default: ${{ github.event.head_commit.message }}
+  releasers:
+    description: GitHub logins allowed to release, separated by spaces or commas; anyone when empty.
+    default: ''
+  actor:
+    description: Who releases; the person who merged the release commit, or who re-ran the run.
+    default: ${{ github.triggering_actor }}
   token:
     description: A token to read the repo's tags.
     default: ${{ github.token }}

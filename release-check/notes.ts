@@ -21,3 +21,9 @@ export function changelogNotes(text: string, tag: string): string {
 export function hasEntry(notes: string): boolean {
   return /^- \S/m.test(notes)
 }
+
+// Logins separated by spaces, commas or lines; GitHub compares them case-insensitively.
+export function isReleaser(actor: string, releasers: string): boolean {
+  const list = releasers.split(/[\s,]+/).filter(Boolean).map((x) => x.toLowerCase())
+  return list.length === 0 || list.includes(actor.toLowerCase())
+}

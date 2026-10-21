@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { manifestVersion, tomlString } from '../lib/manifest.ts'
-import { changelogNotes, commitTitle, hasEntry } from '../release-check/notes.ts'
+import { changelogNotes, commitTitle, hasEntry, isReleaser } from '../release-check/notes.ts'
 
 const fixture = (path: string) => readFileSync(new URL(`fixtures/${path}`, import.meta.url), 'utf8')
 const version = (path: string) => manifestVersion(path, fixture(path))
@@ -46,4 +46,14 @@ test('notes need a bullet', () => {
   assert.equal(hasEntry(changelogNotes(log, 'v0.9.0')), false)
   assert.equal(hasEntry('-'), false)
   assert.equal(hasEntry('-  '), false)
+})
+
+test('releasers', () => {
+  assert.equal(isReleaser('vladkens', 'vladkens'), true)
+  assert.equal(isReleaser('VladKens', 'other, vladkens'), true)
+  assert.equal(isReleaser('vladkens', 'a\nvladkens b'), true)
+  assert.equal(isReleaser('flaburgan', 'vladkens'), false)
+  assert.equal(isReleaser('vlad', 'vladkens'), false)
+  assert.equal(isReleaser('anyone', ''), true)
+  assert.equal(isReleaser('anyone', ' , '), true)
 })

@@ -4,6 +4,9 @@ inputs:
   working-directory:
     description: The directory with pyproject.toml and changelog.md.
     default: .
+  releasers:
+    description: GitHub logins allowed to release, separated by spaces or commas. A release commit merged by anyone else fails before anything is published; one of them re-runs it.
+    default: ${{ github.repository_owner }}
   artifact:
     description: The artifact py-build uploaded.
     default: release
@@ -34,6 +37,7 @@ runs:
       if: steps.mode.outputs.release == 'true'
       uses: $/release-check
       with:
+        releasers: ${{ inputs.releasers }}
         manifest: ${{ inputs.working-directory }}/pyproject.toml
         changelog: ${{ inputs.working-directory }}/changelog.md
     - if: steps.mode.outputs.release == 'true'

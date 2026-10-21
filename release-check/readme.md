@@ -9,6 +9,8 @@ when something doesn't match.
 - The notes are the changelog's `## vX.Y.Z ...` section up to the next `## ` heading, without
   `---` rules. The tag is compared as a word: `v1.0.1` never takes `## v1.0.10`. The section must
   have at least one `- ` entry.
+- With `releasers` (logins separated by spaces or commas), `actor` must be one of them: by
+  default the person who merged the commit, or who re-ran the run. Empty lets anyone release.
 - If the tag already exists, it must point to this commit. Checked here, before anything is
   published, and again by `github-release`.
 

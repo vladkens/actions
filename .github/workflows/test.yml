@@ -92,11 +92,28 @@ jobs:
           manifest: tests/fixtures/cargo/Cargo.toml
           changelog: tests/fixtures/missing.md
           message: 'release: v1.0.1'
+      - id: not-a-releaser
+        continue-on-error: true
+        uses: ./release-check
+        with:
+          manifest: tests/fixtures/cargo/Cargo.toml
+          changelog: tests/fixtures/changelog.md
+          message: 'release: v1.0.1'
+          releasers: someone-else
       - env:
           OUTCOMES: >-
             ${{ steps.wrong-version.outcome }} ${{ steps.not-a-release.outcome }}
             ${{ steps.no-entry.outcome }} ${{ steps.no-changelog.outcome }}
-        run: test "$OUTCOMES" = "failure failure failure failure"
+            ${{ steps.not-a-releaser.outcome }}
+        run: test "$OUTCOMES" = "failure failure failure failure failure"
+
+      # The run's own actor among the releasers.
+      - uses: ./release-check
+        with:
+          manifest: tests/fixtures/cargo/Cargo.toml
+          changelog: tests/fixtures/changelog.md
+          message: 'release: v1.0.1'
+          releasers: someone-else, ${{ github.triggering_actor }}
 
   crates-publish:
     runs-on: ubuntu-latest

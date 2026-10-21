@@ -4,9 +4,15 @@ import { join } from 'node:path'
 import { env, fail, input, logText, main, setOutput } from '../lib/core.ts'
 import { tagCommit } from '../lib/github.ts'
 import { MANIFESTS, manifestVersion } from '../lib/manifest.ts'
-import { changelogNotes, commitTitle, hasEntry } from './notes.ts'
+import { changelogNotes, commitTitle, hasEntry, isReleaser } from './notes.ts'
 
 await main(() => {
+  const actor = input('actor')
+  const releasers = input('releasers')
+  if (!isReleaser(actor, releasers)) {
+    fail(`release run started by '${actor}', but only '${releasers}' may release: nothing published; one of them can re-run it`)
+  }
+
   const manifest = input('manifest') || MANIFESTS.find((x) => existsSync(x))
   if (!manifest) fail(`no ${MANIFESTS.join(', ')} here; set 'manifest'`)
   const version = manifestVersion(manifest, readFileSync(manifest, 'utf8'))
