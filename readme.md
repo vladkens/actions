@@ -8,6 +8,7 @@ specifics (Docker, Homebrew).
 | Action | Does |
 | --- | --- |
 | rust-build | Read-only: checks a release commit, builds the release files, uploads them |
+| rust-dist | Builds a crate's binaries for a list of targets and packs them with the readme and license |
 | rust-publish | Writes, never compiles: the dev pre-release, or crates.io + tag + GitHub release |
 | [release-check](release-check/readme.md) | `release: vX.Y.Z` commit title = manifest version; notes from `changelog.md` |
 | [github-release](github-release/readme.md) | Tag, GitHub release, assets; a re-run uploads only what is missing |
@@ -50,8 +51,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: vladkens/actions/rust-build@v1
         with:
-          dist: make dist # writes target/distrib/<name>-dev*; omit for a crate without binaries
-          cache-directories: ~/.cache/cargo-cross
+          targets: aarch64-apple-darwin x86_64-unknown-linux-gnu x86_64-pc-windows-gnu
 
   # Writes, never compiles.
   publish:
@@ -77,8 +77,12 @@ jobs:
   and refuses files not named `<name>-dev*`. It does nothing on pull requests or other branches.
 - rust-build fails in a job with `id-token: write`; it can't see `contents: write`, so keep every
   write permission to the publish job.
+- `targets` builds the binaries (Apple ones on the Mac, Linux and Windows through
+  [cargo-cross](https://github.com/zijiren233/cargo-cross), glibc 2.28) into
+  `<name>-dev-<target>.tar.gz` (`.zip` for Windows) with the readme and license; no Makefile target
+  needed. `dist: <command>` replaces it when a repo ships something else (wavo's dSYM).
 - Inputs: `rust-build/action.yml`, `rust-publish/action.yml`. A crate without binaries drops
-  `dist` and sets `files: false` on rust-publish; `crates: false` skips crates.io, `dev: false`
+  `targets` and sets `files: false` on rust-publish; `crates: false` skips crates.io, `dev: false`
   the pre-release. Output `tag` is the released tag, empty otherwise, for steps after it (a
   Homebrew formula, say).
 - Keep the workflow's `concurrency` queueing default-branch runs (not cancelling them), so two

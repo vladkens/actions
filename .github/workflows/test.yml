@@ -402,3 +402,52 @@ jobs:
           grep -qx "  url \"https://github.com/$GITHUB_REPOSITORY/releases/download/v1.2.3/fixture-v1.2.3.tar.gz\"" <<< "$formula"
           grep -qx "  sha256 \"$(sha256sum "$RUNNER_TEMP/fixture-v1.2.3.tar.gz" | cut -d' ' -f1)\"" <<< "$formula"
           test "$(git --git-dir="$RUNNER_TEMP/tap.git" log -1 --format='%an | %s')" = "github-actions[bot] | fixture v1.2.3"
+
+  # rust-dist on a real binary crate: Apple natively, Linux through cargo-cross.
+  rust-dist-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - id: dist
+        uses: ./rust-dist
+        with:
+          targets: aarch64-apple-darwin x86_64-unknown-linux-gnu
+          name: fixture
+          working-directory: tests/fixtures/bin
+      - working-directory: tests/fixtures/bin
+        env:
+          FILES: ${{ steps.dist.outputs.files }}
+        run: |
+          test "$FILES" = "$(printf 'target/distrib/fixture-dev-aarch64-apple-darwin.tar.gz\ntarget/distrib/fixture-dev-x86_64-unknown-linux-gnu.tar.gz')"
+          for f in $FILES; do test "$(tar tzf "$f" | sort | tr '\n' ' ')" = "fixture-bin readme.md "; done
+          mkdir unpacked
+          tar xzf target/distrib/fixture-dev-x86_64-unknown-linux-gnu.tar.gz -C unpacked
+          file unpacked/fixture-bin | grep -q 'ELF 64-bit.*x86-64'
+          tar xzf target/distrib/fixture-dev-aarch64-apple-darwin.tar.gz -C unpacked
+          test "$(unpacked/fixture-bin)" = "fixture-bin 0.1.0"
+
+  rust-dist-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - id: dist
+        uses: ./rust-dist
+        with:
+          targets: x86_64-unknown-linux-gnu
+          name: fixture
+          working-directory: tests/fixtures/bin
+      # Apple targets need a Mac.
+      - id: apple
+        continue-on-error: true
+        uses: ./rust-dist
+        with:
+          targets: aarch64-apple-darwin
+          working-directory: tests/fixtures/bin
+      - working-directory: tests/fixtures/bin
+        env:
+          OUTCOME: ${{ steps.apple.outcome }}
+        run: |
+          test "$OUTCOME" = failure
+          mkdir unpacked
+          tar xzf target/distrib/fixture-dev-x86_64-unknown-linux-gnu.tar.gz -C unpacked
+          test "$(unpacked/fixture-bin)" = "fixture-bin 0.1.0"

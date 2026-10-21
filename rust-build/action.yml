@@ -1,8 +1,14 @@
 name: rust-build
 description: The read-only half of a Rust release. Checks a release commit, builds the release files and uploads them for rust-publish.
 inputs:
+  targets:
+    description: Rust targets to build the binaries for, packed with the readme and license as `<name>-dev-<target>`; empty for a crate without binaries. Apple ones need a macOS runner.
+    default: ''
+  name:
+    description: The archives' prefix; the repo's name when empty.
+    default: ''
   dist:
-    description: Builds the release files into target/distrib, named `<name>-dev*`; empty for a crate without binaries.
+    description: Instead of `targets`, a command that builds the release files into target/distrib, named `<name>-dev*`.
     default: ''
   crates:
     description: On a release commit, run `cargo publish --dry-run`.
@@ -39,21 +45,28 @@ runs:
       with:
         dry-run: true
 
-    - if: inputs.dist != '' && inputs.cache == 'true'
+    - if: (inputs.targets != '' || inputs.dist != '') && inputs.cache == 'true'
       uses: Swatinem/rust-cache@v2
       with:
-        cache-directories: ${{ inputs.cache-directories }}
+        cache-directories: |
+          ${{ inputs.cache-directories }}
+          ${{ inputs.targets != '' && '~/.cache/cargo-cross' || '' }}
     # After the cache, whose key hashes Cargo.lock. A release keeps its plain version: its files
     # are published as they are.
-    - if: inputs.dist != '' && inputs.dev-version == 'true' && steps.check.outcome == 'skipped'
+    - if: (inputs.targets != '' || inputs.dist != '') && inputs.dev-version == 'true' && steps.check.outcome == 'skipped'
       uses: $/dev-version
-    - if: inputs.dist != ''
+    - if: inputs.targets != ''
+      uses: $/rust-dist
+      with:
+        targets: ${{ inputs.targets }}
+        name: ${{ inputs.name }}
+    - if: inputs.targets == '' && inputs.dist != ''
       name: Build the release files
       shell: bash
       env:
         DIST: ${{ inputs.dist }}
       run: eval "$DIST"
-    - if: inputs.dist != ''
+    - if: inputs.targets != '' || inputs.dist != ''
       uses: actions/upload-artifact@v7
       with:
         name: ${{ inputs.artifact }}

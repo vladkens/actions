@@ -1,0 +1,18 @@
+name: rust-dist
+description: Build a crate's binaries for a list of targets and pack each into target/distrib with the readme and license.
+inputs:
+  targets:
+    description: Rust targets, e.g. `aarch64-apple-darwin x86_64-unknown-linux-gnu x86_64-pc-windows-gnu`. Apple ones need a macOS runner.
+    required: true
+  name:
+    description: The archives' prefix, `<name>-dev-<target>`; the repo's name when empty.
+    default: ''
+  working-directory:
+    description: The crate's directory.
+    default: ''
+outputs:
+  files:
+    description: The archives, one per line.
+runs:
+  using: node24
+  main: index.ts
