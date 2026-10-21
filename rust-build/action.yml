@@ -13,6 +13,9 @@ inputs:
   dist:
     description: Instead of `targets`, a command that builds the release files into target/distrib, named `<name>-dev*`.
     default: ''
+  dev:
+    description: Also build the files on other pushes, for rust-publish's rolling dev pre-release. Off by default; release commits and manual runs always build.
+    default: 'false'
   crates:
     description: On a release commit, run `cargo publish --dry-run`.
     default: 'true'
@@ -48,7 +51,24 @@ runs:
       with:
         dry-run: true
 
-    - if: (inputs.targets != '' || inputs.dist != '') && inputs.cache == 'true'
+    - id: plan
+      name: Decide whether to build the files
+      shell: bash
+      env:
+        FILES: ${{ inputs.targets != '' || inputs.dist != '' }}
+        RELEASE: ${{ steps.check.outcome == 'success' }}
+        DEV: ${{ inputs.dev }}
+        EVENT: ${{ github.event_name }}
+      run: |
+        build=false
+        if [ "$FILES" = true ] && { [ "$RELEASE" = true ] || [ "$DEV" = true ] || [ "$EVENT" = workflow_dispatch ]; }; then
+          build=true
+        elif [ "$FILES" = true ]; then
+          echo "no release files on this push: not a release commit, and dev is off"
+        fi
+        echo "build=$build" >> "$GITHUB_OUTPUT"
+
+    - if: steps.plan.outputs.build == 'true' && inputs.cache == 'true'
       uses: Swatinem/rust-cache@v2
       with:
         cache-directories: |
@@ -56,21 +76,21 @@ runs:
           ${{ inputs.targets != '' && '~/.cache/cargo-cross' || '' }}
     # After the cache, whose key hashes Cargo.lock. A release keeps its plain version: its files
     # are published as they are.
-    - if: (inputs.targets != '' || inputs.dist != '') && inputs.dev-version == 'true' && steps.check.outcome == 'skipped'
+    - if: steps.plan.outputs.build == 'true' && inputs.dev-version == 'true' && steps.check.outcome == 'skipped'
       uses: $/dev-version
-    - if: inputs.targets != ''
+    - if: steps.plan.outputs.build == 'true' && inputs.targets != ''
       uses: $/rust-dist
       with:
         targets: ${{ inputs.targets }}
         name: ${{ inputs.name }}
         profile: ${{ inputs.profile }}
-    - if: inputs.targets == '' && inputs.dist != ''
+    - if: steps.plan.outputs.build == 'true' && inputs.targets == ''
       name: Build the release files
       shell: bash
       env:
         DIST: ${{ inputs.dist }}
       run: eval "$DIST"
-    - if: inputs.targets != '' || inputs.dist != ''
+    - if: steps.plan.outputs.build == 'true'
       uses: actions/upload-artifact@v7
       with:
         name: ${{ inputs.artifact }}

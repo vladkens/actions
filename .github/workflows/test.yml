@@ -275,7 +275,16 @@ jobs:
           dist: mkdir -p target/distrib && echo one > target/distrib/fixture-dev-a.txt
           cache: false
           dev-version: false # no Cargo.toml at this repo's root; dev-version is tested below
+          dev: true
           artifact: release-test
+      # Without dev, a plain push builds nothing (a manual run always builds).
+      - if: github.event_name == 'push'
+        uses: ./rust-build
+        with:
+          dist: mkdir -p target/distrib && echo one > target/distrib/fixture-dev-b.txt
+          cache: false
+          dev-version: false
+          artifact: release-nodev
 
   # A non-release build's version from `git describe` against this repo's vX.Y.Z tags.
   dev-version:
@@ -343,12 +352,27 @@ jobs:
           artifact: release-test
           dev-tag: ${{ env.TAG }}
           dev-branch: ${{ github.ref_name }}
+      # No dev build to download: no dev pre-release, and no failure.
+      - id: nodev
+        if: github.event_name == 'push'
+        uses: ./rust-publish
+        with:
+          name: fixture
+          crates: false
+          artifact: release-nodev
+          dev-tag: ${{ env.TAG }}-nodev
+          dev-branch: ${{ github.ref_name }}
       - env:
           WRONG: ${{ steps.wrong-name.outcome }}
           FILES: ${{ steps.publish.outputs.files }}
           RELEASED: ${{ steps.publish.outputs.tag }}
+          NODEV: ${{ steps.nodev.outcome }}
         run: |
           test "$WRONG" = failure
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            test "$NODEV" = success
+            if gh release view "$TAG-nodev" > /dev/null 2>&1; then exit 1; fi
+          fi
           test "$FILES" = target/distrib/fixture-dev-a.txt
           test -z "$RELEASED"
           test "$(gh release view "$TAG" --json isPrerelease,assets --jq '"\(.isPrerelease)|" + ([.assets[].name] | join(","))')" = "true|fixture-dev-a.txt"
@@ -356,7 +380,9 @@ jobs:
           gh release download "$TAG" --pattern fixture-dev-a.txt --dir "$RUNNER_TEMP"
           gh attestation verify "$RUNNER_TEMP/fixture-dev-a.txt" -R "$GITHUB_REPOSITORY"
       - if: always()
-        run: gh release delete "$TAG" --cleanup-tag --yes || true
+        run: |
+          gh release delete "$TAG" --cleanup-tag --yes || true
+          gh release delete "$TAG-nodev" --cleanup-tag --yes || true
 
   # homebrew-bump against a local bare tap: a first run commits url/version/sha256, a second
   # changes nothing, and no tag means no work.

@@ -66,9 +66,11 @@ jobs:
       - uses: vladkens/actions/rust-publish@v1
 ```
 
-- A push to the default branch publishes the files as the `dev` pre-release. A release commit
-  publishes the crate and creates the release with the same files renamed from `<name>-dev` to
-  `<name>-vX.Y.Z` (`<name>` is the repo's name unless set); the next push updates `dev`.
+- A release commit publishes the crate and creates the release with its files renamed from
+  `<name>-dev` to `<name>-vX.Y.Z` (`<name>` is the repo's name unless set). With `dev: true` on
+  rust-build, every push to the default branch also builds them and rust-publish puts them up
+  as the rolling `dev` pre-release (for testing fixes, or a baseline to compare against); off
+  by default, so other pushes build nothing.
 - Outside release commits rust-build first sets the package version in Cargo.toml and Cargo.lock
   to `git describe` against the last `vX.Y.Z` tag (`0.9.0-12-g3672a1b`: 12 commits after
   v0.9.0), so dev builds say what they are; a release builds its plain version.
@@ -83,8 +85,7 @@ jobs:
   needed. `profile: dist` builds another cargo profile; with debug info the macOS archives also
   get `<bin>.dSYM`. `dist: <command>` replaces it all when a repo ships something else.
 - Inputs: `rust-build/action.yml`, `rust-publish/action.yml`. A crate without binaries drops
-  `targets` and sets `files: false` on rust-publish; `crates: false` skips crates.io, `dev: false`
-  the pre-release. Output `tag` is the released tag, empty otherwise, for steps after it (a
+  `targets` and sets `files: false` on rust-publish; `crates: false` skips crates.io. Output `tag` is the released tag, empty otherwise, for steps after it (a
   Homebrew formula, say).
 - Keep the workflow's `concurrency` queueing default-branch runs (not cancelling them), so two
   dev updates don't overlap.
