@@ -7,3 +7,4 @@ twscrape releases on a tag push with its own steps (version check, `uv build`, p
 - [ ] test.yml: py-build on a package fixture, its files checked; py-publish does nothing outside a release commit; py-build refuses a writing job.
 - [ ] readme; v1 moved.
 - [ ] twscrape PR: one `main.yml` (test matrix, build, publish), absolute image URLs in the readme; PyPI's Trusted Publisher on `main.yml`.
+- [ ] twscrape: `@main` back to `@v1` once v1 is moved.

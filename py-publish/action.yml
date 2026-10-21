@@ -1,5 +1,5 @@
 name: py-publish
-description: The writing half of a Python release. On a release commit publishes py-build's files to PyPI and creates the tag and GitHub release. Never builds.
+description: The writing half of a Python release. On a release commit checks py-build's files into dist/ and creates the tag and GitHub release; the workflow's next step uploads them to PyPI. Never builds.
 inputs:
   working-directory:
     description: The directory with pyproject.toml and changelog.md.
@@ -9,7 +9,7 @@ inputs:
     default: release
 outputs:
   tag:
-    description: The released tag; empty when this run released nothing.
+    description: The released tag; empty when this run released nothing, so the PyPI upload after it is skipped.
     value: ${{ steps.check.outputs.tag }}
 runs:
   using: composite
@@ -67,12 +67,6 @@ runs:
           exit 1
         fi
 
-    # https://docs.pypi.org/trusted-publishers/ ; also uploads PEP 740 attestations.
-    - if: steps.mode.outputs.release == 'true'
-      uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        packages-dir: ${{ inputs.working-directory }}/dist # in the workspace: the action runs in a container
-        skip-existing: true
     - if: steps.mode.outputs.release == 'true'
       uses: $/github-release
       with:

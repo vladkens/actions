@@ -12,7 +12,7 @@ specifics (Docker, Homebrew).
 | rust-dist | Builds a crate's binaries for a list of targets and packs them with the readme and license |
 | rust-publish | Writes, never compiles: the dev pre-release, or crates.io + tag + GitHub release |
 | py-build | Read-only: checks a release commit, builds the sdist and wheel with uv, uploads them |
-| py-publish | Writes, never builds: on a release commit PyPI + tag + GitHub release |
+| py-publish | Writes, never builds: on a release commit checks the files, tag + GitHub release |
 | [release-check](release-check/readme.md) | `release: vX.Y.Z` commit title = manifest version; notes from `changelog.md` |
 | [github-release](github-release/readme.md) | Tag, GitHub release, assets; a re-run uploads only what is missing |
 | [dev-release](dev-release/readme.md) | Rolling `dev` pre-release with the latest build's assets |
@@ -136,16 +136,22 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v7
-      - uses: vladkens/actions/py-publish@v1
+      - id: release
+        uses: vladkens/actions/py-publish@v1
+      # Here, not inside py-publish: it can't run from a composite action.
+      - if: steps.release.outputs.tag != ''
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
 ```
 
-- Every run builds the files (cheap, and it checks the packaging); only a release commit publishes
-  them, to PyPI through Trusted Publishing with
-  [pypa/gh-action-pypi-publish](https://github.com/pypa/gh-action-pypi-publish) (which also
-  uploads PEP 740 attestations), then creates the tag and the GitHub release with the changelog's
-  notes. No dev pre-release.
+- Every run builds the files (cheap, and it checks the packaging). On a release commit py-publish
+  downloads them into `dist/`, creates the tag and the GitHub release with the changelog's notes,
+  and [pypa/gh-action-pypi-publish](https://github.com/pypa/gh-action-pypi-publish) uploads them
+  to PyPI through Trusted Publishing, with PEP 740 attestations. A failed upload is fixed by
+  re-running the job. No dev pre-release.
 - py-publish refuses files other than `<name>-<version>.tar.gz` and `<name>-<version>-*.whl`
-  (the normalized project name and the release's version), and skips files already on PyPI.
+  (the normalized project name and the release's version, which must be canonical PEP 440).
 - PyPI's Trusted Publisher names the repo's workflow file (e.g. `main.yml`), with no environment.
 - The readme becomes the PyPI page: link images by absolute URL.
 - Inputs: `py-build/action.yml`, `py-publish/action.yml`.

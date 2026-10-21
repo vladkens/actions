@@ -390,14 +390,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - id: build
-        uses: ./py-build
+      - uses: ./py-build
         with:
           working-directory: tests/fixtures/pypkg
           artifact: py-test
-      - env:
-          FILES: ${{ steps.build.outputs.files }}
-        run: test "$FILES" = "$(printf 'dist/fixture_pkg-0.1.0-py2.py3-none-any.whl\ndist/fixture_pkg-0.1.0.tar.gz')"
+      - run: test "$(ls tests/fixtures/pypkg/dist)" = "$(printf 'fixture_pkg-0.1.0-py2.py3-none-any.whl\nfixture_pkg-0.1.0.tar.gz')"
 
   py-build-write:
     if: github.event_name != 'pull_request'
