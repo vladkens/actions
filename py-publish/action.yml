@@ -1,0 +1,80 @@
+name: py-publish
+description: The writing half of a Python release. On a release commit publishes py-build's files to PyPI and creates the tag and GitHub release. Never builds.
+inputs:
+  working-directory:
+    description: The directory with pyproject.toml and changelog.md.
+    default: .
+  artifact:
+    description: The artifact py-build uploaded.
+    default: release
+outputs:
+  tag:
+    description: The released tag; empty when this run released nothing.
+    value: ${{ steps.check.outputs.tag }}
+runs:
+  using: composite
+  steps:
+    # Decided from the event, never from the artifact: the build backend could have written anything.
+    - id: mode
+      name: Decide what to publish
+      shell: bash
+      env:
+        EVENT: ${{ github.event_name }}
+        MESSAGE: ${{ github.event.head_commit.message }}
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      run: |
+        release=false
+        if [ "$EVENT" = push ] && [ "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH" ] && [[ "$MESSAGE" == release:* ]]; then
+          release=true
+        fi
+        echo "release=$release" >> "$GITHUB_OUTPUT"
+        echo "py-publish: release=$release ($EVENT on $GITHUB_REF_NAME)"
+
+    - id: check
+      if: steps.mode.outputs.release == 'true'
+      uses: $/release-check
+      with:
+        manifest: ${{ inputs.working-directory }}/pyproject.toml
+        changelog: ${{ inputs.working-directory }}/changelog.md
+    - if: steps.mode.outputs.release == 'true'
+      uses: actions/download-artifact@v8
+      with:
+        name: ${{ inputs.artifact }}
+        path: ${{ inputs.working-directory }}/dist
+    - if: steps.mode.outputs.release == 'true'
+      name: Check the files
+      shell: bash
+      env:
+        DIST: ${{ inputs.working-directory }}/dist
+        PYPROJECT: ${{ inputs.working-directory }}/pyproject.toml
+        VERSION: ${{ steps.check.outputs.version }}
+      run: |
+        name=$(python3 -c 'import re, sys, tomllib; print(re.sub(r"[-_.]+", "_", tomllib.load(open(sys.argv[1], "rb"))["project"]["name"]).lower())' "$PYPROJECT")
+        count=0
+        for f in "$DIST"/* "$DIST"/.[!.]*; do
+          [ -e "$f" ] || [ -L "$f" ] || continue
+          file=${f#"$DIST"/}
+          if [ -L "$f" ] || [ ! -f "$f" ] || { [ "$file" != "$name-$VERSION.tar.gz" ] && [[ "$file" != "$name-$VERSION-"*.whl ]]; }; then
+            echo "::error::unexpected '$file' in the release files: expected $name-$VERSION.tar.gz or $name-$VERSION-*.whl"
+            exit 1
+          fi
+
+          count=$((count + 1))
+        done
+
+        if [ "$count" = 0 ]; then
+          echo "::error::no release files in the artifact: expected $name-$VERSION.tar.gz or $name-$VERSION-*.whl"
+          exit 1
+        fi
+
+    # https://docs.pypi.org/trusted-publishers/ ; also uploads PEP 740 attestations.
+    - if: steps.mode.outputs.release == 'true'
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        packages-dir: ${{ inputs.working-directory }}/dist # in the workspace: the action runs in a container
+        skip-existing: true
+    - if: steps.mode.outputs.release == 'true'
+      uses: $/github-release
+      with:
+        tag: ${{ steps.check.outputs.tag }}
+        notes: ${{ steps.check.outputs.notes }}

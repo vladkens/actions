@@ -1,8 +1,9 @@
 # actions
 
 Shared release steps for vladkens' repos, as GitHub Actions. A Rust repo uses two of them:
-[rust-build](#a-rust-repo) and [rust-publish](#a-rust-repo) hide the whole release process;
-the others are their building blocks, usable on their own. A repo keeps its own test jobs and
+[rust-build](#a-rust-repo) and [rust-publish](#a-rust-repo) hide the whole release process, and a
+Python repo [py-build and py-publish](#a-python-repo); the others are their building blocks,
+usable on their own. A repo keeps its own test jobs and
 specifics (Docker, Homebrew).
 
 | Action | Does |
@@ -10,6 +11,8 @@ specifics (Docker, Homebrew).
 | rust-build | Read-only: checks a release commit, builds the release files, uploads them |
 | rust-dist | Builds a crate's binaries for a list of targets and packs them with the readme and license |
 | rust-publish | Writes, never compiles: the dev pre-release, or crates.io + tag + GitHub release |
+| py-build | Read-only: checks a release commit, builds the sdist and wheel with uv, uploads them |
+| py-publish | Writes, never builds: on a release commit PyPI + tag + GitHub release |
 | [release-check](release-check/readme.md) | `release: vX.Y.Z` commit title = manifest version; notes from `changelog.md` |
 | [github-release](github-release/readme.md) | Tag, GitHub release, assets; a re-run uploads only what is missing |
 | [dev-release](dev-release/readme.md) | Rolling `dev` pre-release with the latest build's assets |
@@ -108,6 +111,44 @@ jobs:
   attestations: GitHub offers them there only on Enterprise Cloud.
 - `GITHUB_TOKEN` can't create a tag on a commit whose `.github/workflows` differ from the default
   branch (it has no `workflows` permission): keep workflow edits out of release PRs.
+
+## A Python repo
+
+```yaml
+jobs:
+  test:
+    # ...
+
+  # Read-only: the build backend runs here.
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: vladkens/actions/py-build@v1
+
+  # Writes, never builds.
+  publish:
+    if: github.ref == 'refs/heads/main'
+    needs: [test, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: vladkens/actions/py-publish@v1
+```
+
+- Every run builds the files (cheap, and it checks the packaging); only a release commit publishes
+  them, to PyPI through Trusted Publishing with
+  [pypa/gh-action-pypi-publish](https://github.com/pypa/gh-action-pypi-publish) (which also
+  uploads PEP 740 attestations), then creates the tag and the GitHub release with the changelog's
+  notes. No dev pre-release.
+- py-publish refuses files other than `<name>-<version>.tar.gz` and `<name>-<version>-*.whl`
+  (the normalized project name and the release's version), and skips files already on PyPI.
+- PyPI's Trusted Publisher names the repo's workflow file (e.g. `main.yml`), with no environment.
+- The readme becomes the PyPI page: link images by absolute URL.
+- Inputs: `py-build/action.yml`, `py-publish/action.yml`.
 
 ## Development
 

@@ -1,0 +1,50 @@
+name: py-build
+description: The read-only half of a Python release. Checks a release commit, builds the sdist and wheel with uv and uploads them for py-publish.
+inputs:
+  working-directory:
+    description: The directory with pyproject.toml.
+    default: .
+  artifact:
+    description: The artifact name py-publish downloads.
+    default: release
+outputs:
+  files:
+    description: The built files' paths, one per line.
+    value: ${{ steps.build.outputs.files }}
+runs:
+  using: composite
+  steps:
+    # The build backend runs in this job: it must not be able to publish anything.
+    - name: Check the job is read-only
+      shell: bash
+      run: |
+        if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+          echo "::error::py-build runs the build backend: give its job no 'id-token: write' (and no write permissions)"
+          exit 1
+        fi
+
+    - if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:')
+      uses: $/release-check
+      with:
+        manifest: ${{ inputs.working-directory }}/pyproject.toml
+        changelog: ${{ inputs.working-directory }}/changelog.md
+
+    - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+    - id: build
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        rm -rf dist
+        uv build --out-dir dist
+        rm -f dist/.gitignore
+        {
+          echo 'files<<EOF'
+          ls -d dist/*
+          echo EOF
+        } >> "$GITHUB_OUTPUT"
+    - uses: actions/upload-artifact@v7
+      with:
+        name: ${{ inputs.artifact }}
+        path: ${{ inputs.working-directory }}/dist/*
+        if-no-files-found: error
+        overwrite: true

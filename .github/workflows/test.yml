@@ -384,6 +384,58 @@ jobs:
           gh release delete "$TAG" --cleanup-tag --yes || true
           gh release delete "$TAG-nodev" --cleanup-tag --yes || true
 
+  # py-build → py-publish on a package fixture. Outside a release commit py-publish does nothing;
+  # the release path is proven by the first release of a repo using them.
+  py-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - id: build
+        uses: ./py-build
+        with:
+          working-directory: tests/fixtures/pypkg
+          artifact: py-test
+      - env:
+          FILES: ${{ steps.build.outputs.files }}
+        run: test "$FILES" = "$(printf 'dist/fixture_pkg-0.1.0-py2.py3-none-any.whl\ndist/fixture_pkg-0.1.0.tar.gz')"
+
+  py-build-write:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - id: build
+        continue-on-error: true
+        uses: ./py-build
+        with:
+          working-directory: tests/fixtures/pypkg
+          artifact: py-test-write
+      - env:
+          OUTCOME: ${{ steps.build.outcome }}
+        run: test "$OUTCOME" = failure
+
+  py-publish:
+    needs: py-build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - id: publish
+        uses: ./py-publish
+        with:
+          working-directory: tests/fixtures/pypkg
+          artifact: py-test
+      - env:
+          RELEASED: ${{ steps.publish.outputs.tag }}
+        run: |
+          test -z "$RELEASED"
+          test ! -e tests/fixtures/pypkg/dist
+
   # homebrew-bump against a local bare tap: a first run commits url/version/sha256, a second
   # changes nothing, and no tag means no work.
   homebrew-bump:
