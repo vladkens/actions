@@ -1,8 +1,3 @@
-// The first line of a commit message, without the ` (#N)` a squash merge appends.
-export function commitTitle(message: string): string {
-  return message.split(/\r?\n/)[0].trim().replace(/ \(#\d+\)$/, '')
-}
-
 // The body of the `## <tag> ...` section, up to the next `## ` heading, without `---` rules. The
 // tag is compared as a word, not a pattern: `v1.0.1` doesn't match `## v1.0.10`.
 export function changelogNotes(text: string, tag: string): string {

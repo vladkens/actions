@@ -4,9 +4,9 @@ Checks a release commit and takes its notes from the changelog. Fails with one `
 when something doesn't match.
 
 - The commit title must be `release: v` + the manifest's version; a trailing ` (#N)` from the
-  squash merge is ignored. Only a `release: v<version>` title makes a release run; any other,
-  `release: version change` too, builds as a dev commit. The manifest is `Cargo.toml`, `pyproject.toml` or `package.json`
-  (`[package]` / `[workspace.package]`, `[project]` / `[tool.poetry]`, `version`).
+  squash merge is ignored. The manifest is `Cargo.toml`, `pyproject.toml` or `package.json`
+  (`[package]` / `[workspace.package]`, `[project]` / `[tool.poetry]`, `version`). Whether a
+  run is a release at all is [release-commit](../release-commit/readme.md)'s call.
 - The notes are the changelog's `## vX.Y.Z ...` section up to the next `## ` heading, without
   `---` rules. The tag is compared as a word: `v1.0.1` never takes `## v1.0.10`. The section must
   have at least one `- ` entry.
@@ -20,14 +20,16 @@ Inputs and outputs: [action.yml](action.yml). Needs a checkout; no permissions b
 
 ```yaml
 release-check:
-  if: "github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release: v')"
   runs-on: ubuntu-latest
   outputs:
     tag: ${{ steps.check.outputs.tag }}
     notes: ${{ steps.check.outputs.notes }}
   steps:
     - uses: actions/checkout@v7
+    - id: release
+      uses: vladkens/actions/release-commit@v1
     - id: check
+      if: steps.release.outputs.release == 'true'
       uses: vladkens/actions/release-check@v1
 ```
 

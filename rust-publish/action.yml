@@ -37,22 +37,21 @@ runs:
   steps:
     # Decided here from the event, never from the artifact: the build job's dependencies could
     # have written anything into it.
+    - id: release
+      uses: $/release-commit
     - id: mode
       name: Decide what to publish
       shell: bash
       env:
         EVENT: ${{ github.event_name }}
-        MESSAGE: ${{ github.event.head_commit.message }}
-        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        RELEASE: ${{ steps.release.outputs.release }}
         DEV_BRANCH: ${{ inputs.dev-branch || github.event.repository.default_branch }}
         DEV: ${{ inputs.dev }}
         NAME: ${{ inputs.name || github.event.repository.name }}
         PRIVATE: ${{ github.event.repository.private }}
       run: |
         mode=none
-        title=${MESSAGE%%$'\n'*}
-        title=${title%$'\r'}
-        if [ "$EVENT" = push ] && [ "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH" ] && [[ $title =~ ^release:\ v[0-9][^\ ]*(\ \(#[0-9]+\))?$ ]]; then
+        if [ "$RELEASE" = true ]; then
           mode=release
         elif [ "$DEV" = true ] && { [ "$EVENT" = push ] || [ "$EVENT" = workflow_dispatch ]; } && [ "$GITHUB_REF_NAME" = "$DEV_BRANCH" ]; then
           mode=dev
