@@ -44,7 +44,7 @@ runs:
         fi
 
     - id: check
-      if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:')
+      if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release: v')
       uses: $/release-check
     - if: steps.check.outcome == 'success' && inputs.crates == 'true'
       uses: $/crates-publish
