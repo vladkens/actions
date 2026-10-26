@@ -43,8 +43,19 @@ runs:
           exit 1
         fi
 
+    # Only `release: vX.Y.Z` titles release; any other builds as a dev commit.
+    - id: release
+      shell: bash
+      env:
+        EVENT: ${{ github.event_name }}
+        MESSAGE: ${{ github.event.head_commit.message }}
+      run: |
+        title=${MESSAGE%%$'\n'*}
+        if [ "$EVENT" = push ] && [[ $title =~ ^release:\ v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?(\ \(#[0-9]+\))?$ ]]; then
+          echo "is=true" >> "$GITHUB_OUTPUT"
+        fi
     - id: check
-      if: "github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release: v')"
+      if: steps.release.outputs.is == 'true'
       uses: $/release-check
     - if: steps.check.outcome == 'success' && inputs.crates == 'true'
       uses: $/crates-publish

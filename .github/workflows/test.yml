@@ -18,6 +18,10 @@ jobs:
         with:
           node-version: 24
       - run: npm ci
+      # actionlint for make check, pinned.
+      - run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12 "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - run: make check
 
   # Both runner OSes, which also proves the runner runs `main: index.ts` there.
