@@ -26,10 +26,10 @@ release-check:
     notes: ${{ steps.check.outputs.notes }}
   steps:
     - uses: actions/checkout@v7
-    - id: release
+    - id: commit
       uses: vladkens/actions/release-commit@v1
     - id: check
-      if: steps.release.outputs.release == 'true'
+      if: steps.commit.outputs.release == 'true'
       uses: vladkens/actions/release-check@v1
 ```
 

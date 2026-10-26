@@ -37,14 +37,14 @@ runs:
   steps:
     # Decided here from the event, never from the artifact: the build job's dependencies could
     # have written anything into it.
-    - id: release
+    - id: commit
       uses: $/release-commit
     - id: mode
       name: Decide what to publish
       shell: bash
       env:
         EVENT: ${{ github.event_name }}
-        RELEASE: ${{ steps.release.outputs.release }}
+        RELEASE: ${{ steps.commit.outputs.release }}
         DEV_BRANCH: ${{ inputs.dev-branch || github.event.repository.default_branch }}
         DEV: ${{ inputs.dev }}
         NAME: ${{ inputs.name || github.event.repository.name }}

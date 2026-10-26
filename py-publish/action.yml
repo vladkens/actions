@@ -18,22 +18,22 @@ runs:
   using: composite
   steps:
     # Decided from the event, never from the artifact: the build backend could have written anything.
-    - id: release
+    - id: commit
       uses: $/release-commit
 
     - id: check
-      if: steps.release.outputs.release == 'true'
+      if: steps.commit.outputs.release == 'true'
       uses: $/release-check
       with:
         releasers: ${{ inputs.releasers }}
         manifest: ${{ inputs.working-directory }}/pyproject.toml
         changelog: ${{ inputs.working-directory }}/changelog.md
-    - if: steps.release.outputs.release == 'true'
+    - if: steps.commit.outputs.release == 'true'
       uses: actions/download-artifact@v8
       with:
         name: ${{ inputs.artifact }}
         path: ${{ inputs.working-directory }}/dist
-    - if: steps.release.outputs.release == 'true'
+    - if: steps.commit.outputs.release == 'true'
       name: Check the files
       shell: bash
       env:
@@ -59,7 +59,7 @@ runs:
           exit 1
         fi
 
-    - if: steps.release.outputs.release == 'true'
+    - if: steps.commit.outputs.release == 'true'
       uses: $/github-release
       with:
         tag: ${{ steps.check.outputs.tag }}

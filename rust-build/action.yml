@@ -44,10 +44,10 @@ runs:
         fi
 
     # A release commit is checked; any other builds as a dev commit.
-    - id: release
+    - id: commit
       uses: $/release-commit
     - id: check
-      if: steps.release.outputs.release == 'true'
+      if: steps.commit.outputs.release == 'true'
       uses: $/release-check
     - if: steps.check.outcome == 'success' && inputs.crates == 'true'
       uses: $/crates-publish
