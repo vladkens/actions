@@ -27,7 +27,7 @@ runs:
         DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
       run: |
         release=false
-        if [ "$EVENT" = push ] && [ "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH" ] && [[ "$MESSAGE" == release:* ]]; then
+        if [ "$EVENT" = push ] && [ "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH" ] && [[ "$MESSAGE" == "release: v"* ]]; then
           release=true
         fi
         echo "release=$release" >> "$GITHUB_OUTPUT"

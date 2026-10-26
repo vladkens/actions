@@ -4,7 +4,8 @@ Checks a release commit and takes its notes from the changelog. Fails with one `
 when something doesn't match.
 
 - The commit title must be `release: v` + the manifest's version; a trailing ` (#N)` from the
-  squash merge is ignored. The manifest is `Cargo.toml`, `pyproject.toml` or `package.json`
+  squash merge is ignored. Only a title starting `release: v` makes a release run; any other,
+  `release: ...` without a version included, builds as a dev commit. The manifest is `Cargo.toml`, `pyproject.toml` or `package.json`
   (`[package]` / `[workspace.package]`, `[project]` / `[tool.poetry]`, `version`).
 - The notes are the changelog's `## vX.Y.Z ...` section up to the next `## ` heading, without
   `---` rules. The tag is compared as a word: `v1.0.1` never takes `## v1.0.10`. The section must
@@ -19,7 +20,7 @@ Inputs and outputs: [action.yml](action.yml). Needs a checkout; no permissions b
 
 ```yaml
 release-check:
-  if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:')
+  if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release: v')
   runs-on: ubuntu-latest
   outputs:
     tag: ${{ steps.check.outputs.tag }}

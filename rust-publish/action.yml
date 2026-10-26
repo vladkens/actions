@@ -50,7 +50,7 @@ runs:
         PRIVATE: ${{ github.event.repository.private }}
       run: |
         mode=none
-        if [ "$EVENT" = push ] && [ "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH" ] && [[ "$MESSAGE" == release:* ]]; then
+        if [ "$EVENT" = push ] && [ "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH" ] && [[ "$MESSAGE" == "release: v"* ]]; then
           mode=release
         elif [ "$DEV" = true ] && { [ "$EVENT" = push ] || [ "$EVENT" = workflow_dispatch ]; } && [ "$GITHUB_REF_NAME" = "$DEV_BRANCH" ]; then
           mode=dev
