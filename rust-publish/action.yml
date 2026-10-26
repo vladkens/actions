@@ -50,7 +50,9 @@ runs:
         PRIVATE: ${{ github.event.repository.private }}
       run: |
         mode=none
-        if [ "$EVENT" = push ] && [ "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH" ] && [[ ${MESSAGE%%$'\n'*} =~ ^release:\ v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?(\ \(#[0-9]+\))?$ ]]; then
+        title=${MESSAGE%%$'\n'*}
+        title=${title%$'\r'}
+        if [ "$EVENT" = push ] && [ "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH" ] && [[ $title =~ ^release:\ v[0-9][^\ ]*(\ \(#[0-9]+\))?$ ]]; then
           mode=release
         elif [ "$DEV" = true ] && { [ "$EVENT" = push ] || [ "$EVENT" = workflow_dispatch ]; } && [ "$GITHUB_REF_NAME" = "$DEV_BRANCH" ]; then
           mode=dev

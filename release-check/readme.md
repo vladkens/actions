@@ -4,7 +4,7 @@ Checks a release commit and takes its notes from the changelog. Fails with one `
 when something doesn't match.
 
 - The commit title must be `release: v` + the manifest's version; a trailing ` (#N)` from the
-  squash merge is ignored. Only a `release: vX.Y.Z` title makes a release run; any other,
+  squash merge is ignored. Only a `release: v<version>` title makes a release run; any other,
   `release: version change` too, builds as a dev commit. The manifest is `Cargo.toml`, `pyproject.toml` or `package.json`
   (`[package]` / `[workspace.package]`, `[project]` / `[tool.poetry]`, `version`).
 - The notes are the changelog's `## vX.Y.Z ...` section up to the next `## ` heading, without
