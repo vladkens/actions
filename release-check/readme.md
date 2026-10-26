@@ -20,7 +20,7 @@ Inputs and outputs: [action.yml](action.yml). Needs a checkout; no permissions b
 
 ```yaml
 release-check:
-  if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release: v')
+  if: "github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release: v')"
   runs-on: ubuntu-latest
   outputs:
     tag: ${{ steps.check.outputs.tag }}
