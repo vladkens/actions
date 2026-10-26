@@ -13,6 +13,7 @@ specifics (Docker, Homebrew).
 | rust-publish | Writes, never compiles: the dev pre-release, or crates.io + tag + GitHub release |
 | py-build | Read-only: checks a release commit, builds the sdist and wheel with uv, uploads them |
 | py-publish | Writes, never builds: on a release commit checks the files, tag + GitHub release |
+| [release-commit](release-commit/readme.md) | Is this run a release: a push of a `release: vX.Y.Z` commit to the default branch |
 | [release-check](release-check/readme.md) | `release: vX.Y.Z` commit title = manifest version; notes from `changelog.md` |
 | [github-release](github-release/readme.md) | Tag, GitHub release, assets; a re-run uploads only what is missing |
 | [dev-release](dev-release/readme.md) | Rolling `dev` pre-release with the latest build's assets |

@@ -2,17 +2,10 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { manifestVersion, tomlString } from '../lib/manifest.ts'
-import { changelogNotes, commitTitle, hasEntry, isReleaser } from '../release-check/notes.ts'
+import { changelogNotes, hasEntry, isReleaser } from '../release-check/notes.ts'
 
 const fixture = (path: string) => readFileSync(new URL(`fixtures/${path}`, import.meta.url), 'utf8')
 const version = (path: string) => manifestVersion(path, fixture(path))
-
-test('commit title drops the squash suffix and the body', () => {
-  assert.equal(commitTitle('release: v1.0.1 (#12)\n\n* body'), 'release: v1.0.1')
-  assert.equal(commitTitle('release: v1.0.1\r\nbody'), 'release: v1.0.1')
-  assert.equal(commitTitle('release: v1.0.1 (#12) (#13)'), 'release: v1.0.1 (#12)')
-  assert.equal(commitTitle(''), '')
-})
 
 test('manifest versions', () => {
   assert.equal(version('cargo/Cargo.toml'), '1.0.1')

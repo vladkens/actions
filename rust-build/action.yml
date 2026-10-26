@@ -43,8 +43,11 @@ runs:
           exit 1
         fi
 
+    # A release commit is checked; any other builds as a dev commit.
+    - id: commit
+      uses: $/release-commit
     - id: check
-      if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release: v')
+      if: steps.commit.outputs.release == 'true'
       uses: $/release-check
     - if: steps.check.outcome == 'success' && inputs.crates == 'true'
       uses: $/crates-publish

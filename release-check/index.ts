@@ -1,10 +1,11 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { commitTitle } from '../lib/commit.ts'
 import { env, fail, input, logText, main, setOutput } from '../lib/core.ts'
 import { tagCommit } from '../lib/github.ts'
 import { MANIFESTS, manifestVersion } from '../lib/manifest.ts'
-import { changelogNotes, commitTitle, hasEntry, isReleaser } from './notes.ts'
+import { changelogNotes, hasEntry, isReleaser } from './notes.ts'
 
 await main(() => {
   const actor = input('actor')
