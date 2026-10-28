@@ -15,7 +15,7 @@ await main(async () => {
   const zips = globs.flatMap((x) => globSync(x)).sort()
   const certificate = input('certificate')
   if (!certificate) return notice('no certificate (a fork?): the macOS apps keep their ad hoc signature')
-  if (!zips.length) return notice(`'${globs.join(' ')}' matches no files: nothing to sign`)
+  if (!zips.length) fail(`'${globs.join(' ')}' matches no files: nothing to sign`)
   if (process.platform !== 'darwin') fail('macos-sign needs a macOS runner')
 
   const entitlements = input('entitlements')
@@ -59,13 +59,10 @@ await main(async () => {
     for (const zip of zips) {
       const dir = mkdtempSync(join(tmp, 'app-'))
       run('ditto', ['-x', '-k', zip, dir])
-      const apps = readdirSync(dir).filter((x) => x.endsWith('.app'))
-      if (apps.length !== 1) {
-        notice(`${zip}: not one .app at its top, left as is`)
-        continue
-      }
+      const top = readdirSync(dir)
+      if (top.length !== 1 || !top[0].endsWith('.app')) fail(`${zip}: holds ${top.join(', ')}, not one .app`)
 
-      const app = join(dir, apps[0])
+      const app = join(dir, top[0])
       // The hardened runtime and a secure timestamp, which notarization needs.
       const flags = ['--options', 'runtime', '--timestamp', ...(entitlements ? ['--entitlements', entitlements] : [])]
       run('codesign', ['--force', '--sign', id.hash, '--keychain', keychain, ...flags, app])

@@ -2,7 +2,7 @@ name: macos-sign
 description: Sign the .app in zipped macOS release files with a Developer ID and notarize it. Never compiles; without the certificate the files stay as they are.
 inputs:
   files:
-    description: Globs of the zips, one per line, each holding one `.app` at its top (`ditto -c -k --keepParent`).
+    description: Globs of the zips, one per line, each holding just one `.app` (`ditto -c -k --keepParent`); with a certificate, none or anything else fails.
     default: target/distrib/*.zip
   entitlements:
     description: The app's entitlements plist, from the checkout (never from the build's artifact); empty for none.
