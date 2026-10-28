@@ -356,6 +356,7 @@ jobs:
           if ($version -ne '1.2.3-4-gabcdef0') { throw "DisplayVersion: $version" }
 
           # The app's launch at login goes with the uninstall; the uninstaller finishes from a copy.
+          if (-not (Test-Path $run)) { New-Item -Path $run -Force | Out-Null }
           Set-ItemProperty $run -Name test.demo -Value "`"$app\Demo.exe`""
           $p = Start-Process -Wait -PassThru "$app\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
           if ($p.ExitCode -ne 0) { throw "uninstall exited $($p.ExitCode)" }
