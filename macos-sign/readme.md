@@ -1,6 +1,6 @@
 # macos-sign
 
-Signs the `.app` in each zipped macOS release file with a Developer ID, notarizes it with an App Store Connect API key and staples the ticket, then zips it again under the same name. The signature gets the hardened runtime, a secure timestamp and the entitlements file from the checkout: the artifact comes from a job where dependencies' build scripts ran, so nothing but its bytes is trusted. Without `certificate` (a fork, a pull request) it leaves the files as they are; without the API key it signs and doesn't notarize. It signs the bundle itself: nested code (helpers, frameworks) is signed by the app's own bundling, or notarization refuses it.
+Signs the `.app` in each macOS disk image with a Developer ID, makes the image again under the same name (the app beside an `/Applications` link to drag it to, UDZO), signs it, notarizes it with an App Store Connect API key (one submission covers the app in it) and staples the ticket to it. The app's signature gets the hardened runtime, a secure timestamp and the entitlements file from the checkout: the artifact comes from a job where dependencies' build scripts ran, so nothing but its bytes is trusted. Without `certificate` (a fork, a pull request) it leaves the files as they are; without the API key it signs and doesn't notarize. It signs the bundle itself: nested code (helpers, frameworks) is signed by the app's own bundling, or notarization refuses it.
 
 It never compiles: run it in a job of its own between rust-build and rust-publish, so no dependency's build script (or a process one left running) is where the certificate is. Keep the secrets in a GitHub Environment limited to the default branch, sign release commits only, and pin the job's actions by commit. The certificate goes into a keychain of the run's own, deleted at the end. Needs a macOS runner and no permissions.
 
@@ -27,7 +27,7 @@ Inputs: [action.yml](action.yml).
           path: target/distrib
       - uses: vladkens/actions/macos-sign@v1
         with:
-          files: target/distrib/*-macos.zip
+          files: target/distrib/*-macos.dmg
           entitlements: assets/app.entitlements
           required: true # a release is never unsigned
           certificate: ${{ secrets.APPLE_CERTIFICATE }} # base64 .p12

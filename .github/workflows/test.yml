@@ -588,19 +588,21 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
-      - name: An app signed ad hoc, zipped; an entitlement and a certificate
+      - name: An app signed ad hoc in a disk image; an entitlement and a certificate
         run: |
-          mkdir -p dist T.app/Contents/MacOS
+          mkdir -p dist stage/T.app/Contents/MacOS
+          cd stage
           cp /usr/bin/true T.app/Contents/MacOS/T
           plutil -create xml1 T.app/Contents/Info.plist
           plutil -insert CFBundleExecutable -string T T.app/Contents/Info.plist
           plutil -insert CFBundleIdentifier -string test.macos-sign T.app/Contents/Info.plist
+          codesign --force --sign - T.app
+          cd ..
           # plutil takes a key's dots for a path.
           printf '<plist version="1.0"><dict><key>%s</key><true/></dict></plist>\n' \
             com.apple.security.device.audio-input > ent.plist
-          codesign --force --sign - T.app
-          ditto -c -k --keepParent T.app dist/T.zip
-          cp dist/T.zip unsigned.zip
+          hdiutil create -volname T -srcfolder stage -format UDZO dist/T.dmg
+          cp dist/T.dmg unsigned.dmg
           /usr/bin/openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=macos-sign test" \
             -addext keyUsage=critical,digitalSignature -addext extendedKeyUsage=critical,codeSigning \
             -keyout key.pem -out cert.pem
@@ -608,19 +610,22 @@ jobs:
           echo "P12=$(base64 -i id.p12 | tr -d '\n')" >> "$GITHUB_ENV"
       - uses: ./macos-sign
         with:
-          files: dist/*.zip
-      - run: cmp dist/T.zip unsigned.zip
+          files: dist/*.dmg
+      - run: cmp dist/T.dmg unsigned.dmg
       - uses: ./macos-sign
         with:
-          files: dist/*.zip
+          files: dist/*.dmg
           entitlements: ent.plist
           certificate: ${{ env.P12 }}
           certificate-password: test
       - run: |
-          ditto -x -k dist/T.zip out
+          codesign -dv --verbose=2 dist/T.dmg 2>&1 | grep -q 'Authority=macos-sign test'
+          hdiutil attach -nobrowse -readonly -mountpoint out dist/T.dmg
+          test "$(readlink out/Applications)" = /Applications
           codesign --verify --strict out/T.app
           codesign -dv --verbose=2 out/T.app 2>&1 | tee info.txt
           grep -q 'Authority=macos-sign test' info.txt
           grep -q 'flags=0x10000(runtime)' info.txt
           codesign -d --entitlements - --xml out/T.app | grep -q audio-input
+          hdiutil detach out
           ! security list-keychains -d user | grep -q macos-sign
