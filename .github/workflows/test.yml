@@ -588,7 +588,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
-      - name: An app signed ad hoc with an entitlement, zipped; a certificate
+      - name: An app signed ad hoc, zipped; an entitlement and a certificate
         run: |
           mkdir -p dist T.app/Contents/MacOS
           cp /usr/bin/true T.app/Contents/MacOS/T
@@ -597,7 +597,7 @@ jobs:
           plutil -insert CFBundleIdentifier -string test.macos-sign T.app/Contents/Info.plist
           plutil -create xml1 ent.plist
           plutil -insert com.apple.security.device.audio-input -bool true ent.plist
-          codesign --force --sign - --entitlements ent.plist T.app
+          codesign --force --sign - T.app
           ditto -c -k --keepParent T.app dist/T.zip
           cp dist/T.zip unsigned.zip
           /usr/bin/openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=macos-sign test" \
@@ -612,6 +612,7 @@ jobs:
       - uses: ./macos-sign
         with:
           files: dist/*.zip
+          entitlements: ent.plist
           certificate: ${{ env.P12 }}
           certificate-password: test
       - run: |

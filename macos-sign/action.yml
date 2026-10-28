@@ -4,6 +4,9 @@ inputs:
   files:
     description: Globs of the zips, one per line, each holding one `.app` at its top (`ditto -c -k --keepParent`).
     default: target/distrib/*.zip
+  entitlements:
+    description: The app's entitlements plist, from the checkout (never from the build's artifact); empty for none.
+    default: ''
   certificate:
     description: The Developer ID Application certificate with its key, a base64 .p12. Empty (a fork, a pull request) leaves the files as they are.
     default: ''

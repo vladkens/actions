@@ -18,6 +18,7 @@ await main(async () => {
   if (!zips.length) return notice(`'${globs.join(' ')}' matches no files: nothing to sign`)
   if (process.platform !== 'darwin') fail('macos-sign needs a macOS runner')
 
+  const entitlements = input('entitlements')
   const [key, keyId, issuer] = ['api-key', 'api-key-id', 'api-issuer'].map(input)
   if ((key || keyId || issuer) && !(key && keyId && issuer)) {
     fail("notarizing needs 'api-key', 'api-key-id' and 'api-issuer'")
@@ -65,8 +66,8 @@ await main(async () => {
       }
 
       const app = join(dir, apps[0])
-      // The bundle's own entitlements kept; the hardened runtime and a secure timestamp notarization needs.
-      const flags = ['--options', 'runtime', '--timestamp', '--preserve-metadata=entitlements']
+      // The hardened runtime and a secure timestamp, which notarization needs.
+      const flags = ['--options', 'runtime', '--timestamp', ...(entitlements ? ['--entitlements', entitlements] : [])]
       run('codesign', ['--force', '--sign', id.hash, '--keychain', keychain, ...flags, app])
       run('codesign', ['--verify', '--strict', app])
       if (key) {
