@@ -22,6 +22,9 @@ inputs:
   api-issuer:
     description: The API key's issuer ID.
     default: ''
+  required:
+    description: "`true` fails without the certificate or the API key, for a release: never an unsigned or unnotarized one."
+    default: 'false'
 runs:
   using: node24
   main: index.ts

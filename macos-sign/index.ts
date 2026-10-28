@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { globSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fail, input, logText, main, mask, notice, probe, run } from '../lib/core.ts'
+import { bool, fail, input, logText, main, mask, notice, probe, run } from '../lib/core.ts'
 import { identity } from './sign.ts'
 
 // Apple's intermediate for Developer ID certificates, which a runner's keychains may lack.
@@ -14,6 +14,8 @@ await main(async () => {
   const globs = input('files').split('\n').map((x) => x.trim()).filter(Boolean)
   const zips = globs.flatMap((x) => globSync(x)).sort()
   const certificate = input('certificate')
+  const required = bool('required')
+  if (required && !(certificate && input('api-key'))) fail('a release needs the certificate and the API key')
   if (!certificate) return notice('no certificate (a fork?): the macOS apps keep their ad hoc signature')
   if (!zips.length) fail(`input 'files' ('${globs.join(' ')}') matches no files: nothing to sign`)
   if (process.platform !== 'darwin') fail('macos-sign needs a macOS runner')

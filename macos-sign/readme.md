@@ -13,7 +13,7 @@ Inputs: [action.yml](action.yml).
     if: >-
       github.event_name == 'push' && github.ref == 'refs/heads/main'
       && startsWith(github.event.head_commit.message, 'release: v')
-      && github.actor == github.repository_owner
+      && github.triggering_actor == github.repository_owner
     needs: build
     runs-on: macos-latest
     environment: release
@@ -29,6 +29,7 @@ Inputs: [action.yml](action.yml).
         with:
           files: target/distrib/*-macos.zip
           entitlements: assets/app.entitlements
+          required: true # a release is never unsigned
           certificate: ${{ secrets.APPLE_CERTIFICATE }} # base64 .p12
           certificate-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           api-key: ${{ secrets.APPLE_API_KEY }} # the .p8's text
