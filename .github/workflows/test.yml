@@ -595,8 +595,9 @@ jobs:
           plutil -create xml1 T.app/Contents/Info.plist
           plutil -insert CFBundleExecutable -string T T.app/Contents/Info.plist
           plutil -insert CFBundleIdentifier -string test.macos-sign T.app/Contents/Info.plist
-          plutil -create xml1 ent.plist
-          plutil -insert com.apple.security.device.audio-input -bool true ent.plist
+          # plutil takes a key's dots for a path.
+          printf '<plist version="1.0"><dict><key>%s</key><true/></dict></plist>\n' \
+            com.apple.security.device.audio-input > ent.plist
           codesign --force --sign - T.app
           ditto -c -k --keepParent T.app dist/T.zip
           cp dist/T.zip unsigned.zip
