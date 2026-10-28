@@ -619,7 +619,7 @@ jobs:
       - run: |
           ditto -x -k dist/T.zip out
           codesign --verify --strict out/T.app
-          codesign -dv out/T.app 2>&1 | tee info.txt
+          codesign -dv --verbose=2 out/T.app 2>&1 | tee info.txt
           grep -q 'Authority=macos-sign test' info.txt
           grep -q 'flags=0x10000(runtime)' info.txt
           codesign -d --entitlements - --xml out/T.app | grep -q audio-input
