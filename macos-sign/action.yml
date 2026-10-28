@@ -1,0 +1,24 @@
+name: macos-sign
+description: Sign the .app in zipped macOS release files with a Developer ID and notarize it. Never compiles; without the certificate the files stay as they are.
+inputs:
+  files:
+    description: Globs of the zips, one per line, each holding one `.app` at its top (`ditto -c -k --keepParent`).
+    default: target/distrib/*.zip
+  certificate:
+    description: The Developer ID Application certificate with its key, a base64 .p12. Empty (a fork, a pull request) leaves the files as they are.
+    default: ''
+  certificate-password:
+    description: The .p12's password.
+    default: ''
+  api-key:
+    description: An App Store Connect API key (the .p8's text) to notarize with; empty signs without notarizing.
+    default: ''
+  api-key-id:
+    description: The API key's ID.
+    default: ''
+  api-issuer:
+    description: The API key's issuer ID.
+    default: ''
+runs:
+  using: node24
+  main: index.ts

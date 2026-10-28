@@ -581,3 +581,44 @@ jobs:
           mkdir unpacked
           tar xzf target/distrib/fixture-dev-x86_64-unknown-linux-gnu.tar.gz -C unpacked
           test "$(unpacked/fixture-bin)" = "fixture-bin 0.1.0"
+
+  # A self-signed certificate stands in for a Developer ID; notarization needs Apple's, so only
+  # the wavo-app release proves it.
+  macos-sign:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: An app signed ad hoc with an entitlement, zipped; a certificate
+        run: |
+          mkdir -p dist T.app/Contents/MacOS
+          cp /usr/bin/true T.app/Contents/MacOS/T
+          plutil -create xml1 T.app/Contents/Info.plist
+          plutil -insert CFBundleExecutable -string T T.app/Contents/Info.plist
+          plutil -insert CFBundleIdentifier -string test.macos-sign T.app/Contents/Info.plist
+          plutil -create xml1 ent.plist
+          plutil -insert com.apple.security.device.audio-input -bool true ent.plist
+          codesign --force --sign - --entitlements ent.plist T.app
+          ditto -c -k --keepParent T.app dist/T.zip
+          cp dist/T.zip unsigned.zip
+          /usr/bin/openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=macos-sign test" \
+            -addext keyUsage=critical,digitalSignature -addext extendedKeyUsage=critical,codeSigning \
+            -keyout key.pem -out cert.pem
+          /usr/bin/openssl pkcs12 -export -inkey key.pem -in cert.pem -out id.p12 -passout pass:test
+          echo "P12=$(base64 -i id.p12 | tr -d '\n')" >> "$GITHUB_ENV"
+      - uses: ./macos-sign
+        with:
+          files: dist/*.zip
+      - run: cmp dist/T.zip unsigned.zip
+      - uses: ./macos-sign
+        with:
+          files: dist/*.zip
+          certificate: ${{ env.P12 }}
+          certificate-password: test
+      - run: |
+          ditto -x -k dist/T.zip out
+          codesign --verify --strict out/T.app
+          codesign -dv out/T.app 2>&1 | tee info.txt
+          grep -q 'Authority=macos-sign test' info.txt
+          grep -q 'flags=0x10000(runtime)' info.txt
+          codesign -d --entitlements - --xml out/T.app | grep -q audio-input
+          ! security list-keychains -d user | grep -q macos-sign
