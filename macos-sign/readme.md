@@ -9,12 +9,16 @@ Inputs: [action.yml](action.yml).
 ```yaml
   sign:
     # Release commits only (`release: vX.Y.Z`); dev builds stay ad hoc.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'release: v')
+    if: >-
+      github.event_name == 'push' && github.ref == 'refs/heads/main'
+      && startsWith(github.event.head_commit.message, 'release: v')
     needs: build
     runs-on: macos-latest
     environment: release
     steps:
       - uses: actions/checkout@<sha> # v7
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@<sha> # v8
         with:
           name: release-macOS
@@ -32,6 +36,10 @@ Inputs: [action.yml](action.yml).
           name: release-macOS
           path: target/distrib/*
           overwrite: true
+
+  publish:
+    if: github.ref == 'refs/heads/main' && !failure() && !cancelled() # `sign` skipped is fine
+    needs: [test, build, sign]
 ```
 
 The certificate: a "Developer ID Application" one from developer.apple.com (Certificates, +), made from a CSR (`openssl req -new -newkey rsa:2048 -nodes -keyout key.pem -out request.csr -subj "/CN=…"`), and joined with its key into a .p12 (`openssl pkcs12 -export -legacy -inkey key.pem -in <cert>.pem -out id.p12`). The API key: App Store Connect, Users and Access, Integrations, Team Keys, role Developer.
