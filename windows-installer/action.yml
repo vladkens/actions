@@ -14,7 +14,7 @@ inputs:
     description: The installed exe's file name; `<name>.exe` when empty.
     default: ''
   version:
-    description: The version Settings › Apps shows; Cargo.toml's (after dev-version's stamp) when empty.
+    description: The version Settings › Apps shows; the root Cargo.toml's package's (after dev-version's stamp) when empty.
     default: ''
   publisher:
     description: The publisher Settings › Apps shows.
@@ -32,7 +32,7 @@ inputs:
     description: The folder the installers are written to.
     default: target/distrib
   prefix:
-    description: The installers are named `<prefix>-windows-<arch>-setup.exe`; `<name>-dev` when empty, which rust-publish renames.
+    description: The installers are named `<prefix>-windows-<arch>-setup.exe`; `<name>-dev` when empty, which rust-publish renames when its `name` is this `name` too.
     default: ''
 outputs:
   files:
@@ -63,7 +63,12 @@ runs:
         if (-not (Test-Path $iscc)) { Write-Output "::error::expected Inno Setup at $iscc, found none"; exit 1 }
 
         $version = $env:VERSION
-        if (-not $version) { $version = (cargo metadata --no-deps --format-version 1 | ConvertFrom-Json).packages[0].version }
+        if (-not $version) {
+          $manifest = (Resolve-Path Cargo.toml).Path
+          $package = (cargo metadata --no-deps --format-version 1 | ConvertFrom-Json).packages | Where-Object { $_.manifest_path -eq $manifest }
+          if (-not $package) { Write-Output "::error::expected a package in $manifest for the version, found none"; exit 1 }
+          $version = $package.version
+        }
         # Windows' own version field takes numbers only: 0.9.0-12-g3672a1b is 0.9.0 there.
         $numeric = $version -replace '^(\d+\.\d+\.\d+).*$', '$1'
         $exe = if ($env:EXE_NAME) { $env:EXE_NAME } else { "$env:NAME.exe" }
