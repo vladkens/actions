@@ -1,0 +1,95 @@
+name: windows-installer
+description: Per-user Windows installers (Inno Setup) for an app's exes, one per architecture, that its own updater can also run silently.
+inputs:
+  name:
+    description: The app's name, for its folder (`%LOCALAPPDATA%\Programs\<name>`), the Start menu entry and Settings › Apps.
+    required: true
+  id:
+    description: Inno's AppId, a GUID without braces. Never change it; an update and the uninstall find the installed app by it.
+    required: true
+  exe:
+    description: The exes to install, one `<arch>=<path>` per line, with arch `x64` or `arm64`; an installer for each.
+    required: true
+  exe-name:
+    description: The installed exe's file name; `<name>.exe` when empty.
+    default: ''
+  version:
+    description: The version Settings › Apps shows; Cargo.toml's (after dev-version's stamp) when empty.
+    default: ''
+  publisher:
+    description: The publisher Settings › Apps shows.
+    default: ${{ github.repository_owner }}
+  url:
+    description: The publisher's link in Settings › Apps.
+    default: ${{ github.server_url }}/${{ github.repository }}
+  license:
+    description: A file installed beside the exe as LICENSE.txt.
+    default: ''
+  autostart:
+    description: The name of the value the app writes under HKCU `...\CurrentVersion\Run` for launch at login, removed on uninstall.
+    default: ''
+  dir:
+    description: The folder the installers are written to.
+    default: target/distrib
+  prefix:
+    description: The installers are named `<prefix>-windows-<arch>-setup.exe`; `<name>-dev` when empty, which rust-publish renames.
+    default: ''
+outputs:
+  files:
+    description: The installers' paths, one per line.
+    value: ${{ steps.build.outputs.files }}
+runs:
+  using: composite
+  steps:
+    - id: build
+      shell: pwsh
+      env:
+        NAME: ${{ inputs.name }}
+        ID: ${{ inputs.id }}
+        EXES: ${{ inputs.exe }}
+        EXE_NAME: ${{ inputs.exe-name }}
+        VERSION: ${{ inputs.version }}
+        PUBLISHER: ${{ inputs.publisher }}
+        URL: ${{ inputs.url }}
+        LICENSE: ${{ inputs.license }}
+        AUTOSTART: ${{ inputs.autostart }}
+        DIR: ${{ inputs.dir }}
+        PREFIX: ${{ inputs.prefix }}
+        ISS: ${{ github.action_path }}/installer.iss
+      run: |
+        $ErrorActionPreference = 'Stop'
+        # Preinstalled on the hosted Windows runners.
+        $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+        if (-not (Test-Path $iscc)) { Write-Output "::error::expected Inno Setup at $iscc, found none"; exit 1 }
+
+        $version = $env:VERSION
+        if (-not $version) { $version = (cargo metadata --no-deps --format-version 1 | ConvertFrom-Json).packages[0].version }
+        # Windows' own version field takes numbers only: 0.9.0-12-g3672a1b is 0.9.0 there.
+        $numeric = $version -replace '^(\d+\.\d+\.\d+).*$', '$1'
+        $exe = if ($env:EXE_NAME) { $env:EXE_NAME } else { "$env:NAME.exe" }
+        $prefix = if ($env:PREFIX) { $env:PREFIX } else { "$env:NAME-dev" }
+        New-Item -ItemType Directory -Force -Path $env:DIR | Out-Null
+        $dir = (Resolve-Path $env:DIR).Path
+
+        $files = @()
+        foreach ($line in $env:EXES -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ }) {
+          $arch, $source = $line -split '=', 2
+          $allowed = @{ x64 = 'x64compatible'; arm64 = 'arm64' }[$arch]
+          if (-not $allowed -or -not $source) { Write-Output "::error::expected '<x64|arm64>=<path>' in exe, found '$line'"; exit 1 }
+
+          $out = "$prefix-windows-$arch-setup"
+          $defines = @(
+            "/DAppId=$env:ID", "/DAppName=$env:NAME", "/DAppVersion=$version", "/DNumericVersion=$numeric",
+            "/DPublisher=$env:PUBLISHER", "/DUrl=$env:URL", "/DArch=$allowed", "/DExe=$exe",
+            "/DSource=$((Resolve-Path $source).Path)", "/DOutputDir=$dir", "/DOutputName=$out"
+          )
+          if ($env:LICENSE) { $defines += "/DLicense=$((Resolve-Path $env:LICENSE).Path)" }
+          if ($env:AUTOSTART) { $defines += "/DAutostart=$env:AUTOSTART" }
+          & $iscc /Q @defines $env:ISS
+          if ($LASTEXITCODE -ne 0) { Write-Output "::error::ISCC failed with $LASTEXITCODE for $line"; exit 1 }
+
+          $files += "$dir\$out.exe"
+          Write-Output "windows-installer: $dir\$out.exe ($version)"
+        }
+
+        "files<<EOF`n$($files -join "`n")`nEOF" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT

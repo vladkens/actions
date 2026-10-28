@@ -312,6 +312,58 @@ jobs:
       - if: always()
         run: gh release delete "$TAG" --cleanup-tag --yes || true
 
+  # Builds an installer for a stand-in exe, then installs it silently twice (an update), as an
+  # app's updater runs it, and uninstalls it.
+  windows-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force target | Out-Null
+          Copy-Item "$env:SystemRoot\System32\whoami.exe" target\demo.exe
+      - id: installer
+        uses: ./windows-installer
+        with:
+          name: Demo
+          id: 0b9f4c52-3a1e-4d7b-9c2f-6e8a1d5b7f30
+          exe: |
+            x64=target/demo.exe
+            arm64=target/demo.exe
+          version: 1.2.3-4-gabcdef0
+          license: LICENSE
+          autostart: test.demo
+      - shell: pwsh
+        env:
+          FILES: ${{ steps.installer.outputs.files }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = $env:FILES -split "`n" | Where-Object { $_ }
+          if (($files | Split-Path -Leaf) -join ',' -ne 'Demo-dev-windows-x64-setup.exe,Demo-dev-windows-arm64-setup.exe') { throw "files: $files" }
+
+          $app = "$env:LOCALAPPDATA\Programs\Demo"
+          $menu = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Demo.lnk"
+          $uninstall = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{0b9f4c52-3a1e-4d7b-9c2f-6e8a1d5b7f30}_is1'
+          $run = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+          # Installed, then again over it, as an update: exit 0 both times.
+          foreach ($i in 1, 2) {
+            $p = Start-Process -Wait -PassThru $files[0] -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER'
+            if ($p.ExitCode -ne 0) { throw "install $i exited $($p.ExitCode)" }
+          }
+
+          foreach ($f in "$app\Demo.exe", "$app\LICENSE.txt", $menu) { if (-not (Test-Path $f)) { throw "missing $f" } }
+          $version = (Get-ItemProperty $uninstall).DisplayVersion
+          if ($version -ne '1.2.3-4-gabcdef0') { throw "DisplayVersion: $version" }
+
+          # The app's launch at login goes with the uninstall; the uninstaller finishes from a copy.
+          Set-ItemProperty $run -Name test.demo -Value "`"$app\Demo.exe`""
+          $p = Start-Process -Wait -PassThru "$app\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
+          if ($p.ExitCode -ne 0) { throw "uninstall exited $($p.ExitCode)" }
+          for ($i = 0; $i -lt 60 -and (Test-Path "$app\Demo.exe"); $i++) { Start-Sleep -Milliseconds 500 }
+          Start-Sleep -Seconds 2
+          foreach ($f in "$app\Demo.exe", $menu, $uninstall) { if (Test-Path $f) { throw "left: $f" } }
+          if ((Get-ItemProperty $run).PSObject.Properties.Name -contains 'test.demo') { throw 'left: the Run value' }
+
   # rust-build → rust-publish with a fake build, as a repo's workflow uses them: the dev path,
   # published under a throwaway tag. The release path needs a release commit and is proven by the
   # first release of a repo using them.

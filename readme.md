@@ -20,6 +20,7 @@ specifics (Docker, Homebrew).
 | [crates-publish](crates-publish/readme.md) | `cargo publish`; skips a version already on crates.io |
 | dev-version | Non-release builds report `git describe`'s version (e.g. `0.9.0-12-g3672a1b`) |
 | homebrew-bump | Points a tap's formula at the release's archive; nothing without a release |
+| [windows-installer](windows-installer/readme.md) | Per-user Inno Setup installers for an app's exes, which its updater can also run silently |
 
 Use them as `vladkens/actions/<action>@v1`. `v1` moves to each compatible release.
 
