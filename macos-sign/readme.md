@@ -8,10 +8,12 @@ Inputs: [action.yml](action.yml).
 
 ```yaml
   sign:
-    # Release commits only (`release: vX.Y.Z`); dev builds stay ad hoc.
+    # Release commits by the releaser only (`release: vX.Y.Z`, rust-publish's `releasers`); dev
+    # builds stay ad hoc.
     if: >-
       github.event_name == 'push' && github.ref == 'refs/heads/main'
       && startsWith(github.event.head_commit.message, 'release: v')
+      && github.actor == github.repository_owner
     needs: build
     runs-on: macos-latest
     environment: release
@@ -25,6 +27,7 @@ Inputs: [action.yml](action.yml).
           path: target/distrib
       - uses: vladkens/actions/macos-sign@v1
         with:
+          files: target/distrib/*-macos.zip
           entitlements: assets/app.entitlements
           certificate: ${{ secrets.APPLE_CERTIFICATE }} # base64 .p12
           certificate-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}

@@ -15,7 +15,7 @@ await main(async () => {
   const zips = globs.flatMap((x) => globSync(x)).sort()
   const certificate = input('certificate')
   if (!certificate) return notice('no certificate (a fork?): the macOS apps keep their ad hoc signature')
-  if (!zips.length) fail(`'${globs.join(' ')}' matches no files: nothing to sign`)
+  if (!zips.length) fail(`input 'files' ('${globs.join(' ')}') matches no files: nothing to sign`)
   if (process.platform !== 'darwin') fail('macos-sign needs a macOS runner')
 
   const entitlements = input('entitlements')
