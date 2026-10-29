@@ -1,0 +1,36 @@
+name: macos-sign
+description: Developer ID signature of the .app in zipped macOS release files, then notarization and stapling of those files or of disk images made from them. Never compiles; without the certificate or the API key it leaves the files as they are.
+inputs:
+  step:
+    description: "`sign`: a keychain of the run's own with the certificate, and the .app in each zip signed. `notarize`: each file (.zip or .dmg) notarized and stapled, then the keychain deleted. `cleanup` (with `if: always()`): the keychain deleted."
+    required: true
+  files:
+    description: "Globs, one per line: for `sign` zips each holding just one `.app` (`ditto -c -k --keepParent`); for `notarize` those zips or .dmg files."
+    default: ''
+  entitlements:
+    description: The app's entitlements plist, from the checkout (never from the build's artifact); empty for none.
+    default: ''
+  certificate:
+    description: For `sign`, the Developer ID Application certificate with its key, a base64 .p12. Empty (a fork, a pull request) leaves the files as they are.
+    default: ''
+  certificate-password:
+    description: The .p12's password.
+    default: ''
+  api-key:
+    description: For `notarize`, an App Store Connect API key (the .p8's text); empty leaves the files as they are.
+    default: ''
+  api-key-id:
+    description: The API key's ID.
+    default: ''
+  api-issuer:
+    description: The API key's issuer ID.
+    default: ''
+  required:
+    description: "`true` fails without the certificate (`sign`) or the API key (`notarize`), for a release: never an unsigned or unnotarized one."
+    default: 'false'
+outputs:
+  identity:
+    description: "`sign`'s identity, its SHA-1, for signing in later steps (a disk image) until `notarize` or `cleanup` deletes the keychain; empty without a certificate."
+runs:
+  using: node24
+  main: index.ts

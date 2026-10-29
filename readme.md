@@ -20,6 +20,7 @@ specifics (Docker, Homebrew).
 | [crates-publish](crates-publish/readme.md) | `cargo publish`; skips a version already on crates.io |
 | dev-version | Non-release builds report `git describe`'s version (e.g. `0.9.0-12-g3672a1b`) |
 | homebrew-bump | Points a tap's formula at the release's archive; nothing without a release |
+| [macos-sign](macos-sign/readme.md) | Developer ID signature and notarization for the macOS release files, in a job of its own |
 
 Use them as `vladkens/actions/<action>@v1`. `v1` moves to each compatible release.
 
@@ -94,6 +95,9 @@ jobs:
 - Inputs: `rust-build/action.yml`, `rust-publish/action.yml`. A crate without binaries drops
   `targets` and sets `files: false` on rust-publish; `crates: false` skips crates.io. Output `tag` is the released tag, empty otherwise, for steps after it (a
   Homebrew formula, say).
+- A macOS app gets its Developer ID signature and notarization from
+  [macos-sign](macos-sign/readme.md), in a job between `build` and `publish` that never compiles;
+  `publish` then needs it too.
 - Keep the workflow's `concurrency` queueing default-branch runs (not cancelling them), so two
   dev updates don't overlap.
 - A Homebrew formula follows a release with one more step in `publish`, after
