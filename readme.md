@@ -95,6 +95,24 @@ jobs:
 - Inputs: `rust-build/action.yml`, `rust-publish/action.yml`. A crate without binaries drops
   `targets` and sets `files: false` on rust-publish; `crates: false` skips crates.io. Output `tag` is the released tag, empty otherwise, for steps after it (a
   Homebrew formula, say).
+- `pack: <command>` on rust-publish makes the release files there instead, from rust-build's
+  files (bare binaries in `target/distrib/<target>/` from a `dist` command, say): an app's .app
+  and disk image, installers, an update feed. It runs in the checkout after the download, with
+  `LABEL` (`dev`, or the tag on a release, which release-check has checked by then), `TAG` (empty
+  for dev) and the step's `env`, its secrets included; a dev build's version is stamped first, so
+  `cargo metadata` reports it. The files it leaves at the top of `target/distrib`, named
+  `<name>-<LABEL>-*` or `update.txt`, are published as they are, with no rename; its subfolders
+  are not. Like the rest of the job it must not compile.
+
+  ```yaml
+      - uses: vladkens/actions/rust-publish@v1
+        with:
+          pack: make pack
+        env:
+          SIGN_KEY: ${{ secrets.SIGN_KEY }}
+  ```
+
+  `dry-run: true` runs it all up to publishing on any event, as a dev build, and publishes nothing.
 - A macOS app gets its Developer ID signature and notarization from
   [macos-sign](macos-sign/readme.md), in a job between `build` and `publish` that never compiles;
   `publish` then needs it too.
