@@ -20,7 +20,7 @@ await main(() => {
 
   // `git describe` needs the history and the tags; actions/checkout fetches one commit.
   if (run('git', ['rev-parse', '--is-shallow-repository']) === 'true') {
-    run('git', ['fetch', '--quiet', '--unshallow', '--filter=tree:0', '--tags', 'origin'])
+    run('git', ['fetch', '--quiet', '--unshallow', '--tags', 'origin'])
   } else {
     run('git', ['fetch', '--quiet', '--tags', 'origin'])
   }
