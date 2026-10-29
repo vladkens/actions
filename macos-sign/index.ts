@@ -1,8 +1,8 @@
 import { spawnSync } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
-import { copyFileSync, globSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { globSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, join } from 'node:path'
+import { join } from 'node:path'
 import { bool, fail, input, logText, main, mask, notice, probe, run } from '../lib/core.ts'
 import { identity } from './sign.ts'
 
@@ -12,12 +12,12 @@ const G2_SHA256 = 'f16cd3c54c7f83cea4bf1a3e6a0819c8aaa8e4a1528fd144715f350643d2d
 
 await main(async () => {
   const globs = input('files').split('\n').map((x) => x.trim()).filter(Boolean)
-  const dmgs = globs.flatMap((x) => globSync(x)).sort()
+  const zips = globs.flatMap((x) => globSync(x)).sort()
   const certificate = input('certificate')
   const required = bool('required')
   if (required && !(certificate && input('api-key'))) fail('a release needs the certificate and the API key')
   if (!certificate) return notice('no certificate (a fork?): the macOS apps keep their ad hoc signature')
-  if (!dmgs.length) fail(`input 'files' ('${globs.join(' ')}') matches no files: nothing to sign`)
+  if (!zips.length) fail(`input 'files' ('${globs.join(' ')}') matches no files: nothing to sign`)
   if (process.platform !== 'darwin') fail('macos-sign needs a macOS runner')
 
   const entitlements = input('entitlements')
@@ -58,47 +58,41 @@ await main(async () => {
     if (key) writeFileSync(join(tmp, 'key.p8'), key, { mode: 0o600 })
     else notice('no notary API key: signed, not notarized')
 
-    for (const dmg of dmgs) {
-      // The .app out of the image, which is made again around the signed one.
-      const dir = mkdtempSync(join(tmp, 'dmg-'))
-      const [mnt, root, out] = [join(dir, 'mnt'), join(dir, 'root'), join(dir, basename(dmg))]
-      run('hdiutil', ['attach', '-nobrowse', '-readonly', '-noautoopen', '-mountpoint', mnt, dmg])
-      const apps = readdirSync(mnt).filter((x) => x.endsWith('.app'))
-      if (apps.length === 1) run('ditto', [join(mnt, apps[0]), join(root, apps[0])])
-      run('hdiutil', ['detach', mnt])
-      if (apps.length !== 1) fail(`${dmg}: holds ${apps.length} .app, not one`)
+    for (const zip of zips) {
+      const dir = mkdtempSync(join(tmp, 'app-'))
+      run('ditto', ['-x', '-k', zip, dir])
+      const top = readdirSync(dir)
+      if (top.length !== 1 || !top[0].endsWith('.app')) fail(`${zip}: holds ${top.join(', ')}, not one .app`)
 
-      const app = join(root, apps[0])
+      const app = join(dir, top[0])
       // The hardened runtime and a secure timestamp, which notarization needs.
       const flags = ['--options', 'runtime', '--timestamp', ...(entitlements ? ['--entitlements', entitlements] : [])]
       run('codesign', ['--force', '--sign', id.hash, '--keychain', keychain, ...flags, app])
       run('codesign', ['--verify', '--strict', app])
-      symlinkSync('/Applications', join(root, 'Applications'))
-      const name = apps[0].replace(/\.app$/, '')
-      run('hdiutil', ['create', '-volname', name, '-srcfolder', root, '-format', 'UDZO', out])
-      run('codesign', ['--force', '--sign', id.hash, '--keychain', keychain, '--timestamp', out])
       if (key) {
-        // One submission: the image and the app in it.
-        console.log(`$ xcrun notarytool submit ${out} --wait`)
-        const args = ['notarytool', 'submit', out, ...notary, '--wait', '--output-format', 'json']
-        const json = spawnSync('xcrun', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }).stdout
+        const upload = join(dir, 'notarize.zip')
+        run('ditto', ['-c', '-k', '--keepParent', app, upload])
+        console.log(`$ xcrun notarytool submit ${upload} --wait`)
+        const args = ['notarytool', 'submit', upload, ...notary, '--wait', '--output-format', 'json']
+        const out = spawnSync('xcrun', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }).stdout
         let result: { id?: string; status?: string } = {}
         try {
-          result = JSON.parse(json)
+          result = JSON.parse(out)
         } catch {
-          logText(json ?? '')
+          logText(out ?? '')
         }
 
         if (result.status !== 'Accepted') {
           if (result.id) logText(probe('xcrun', ['notarytool', 'log', result.id, ...notary]) ?? '')
-          fail(`${dmg}: notarization ${result.status ?? 'failed'}`)
+          fail(`${zip}: notarization ${result.status ?? 'failed'}`)
         }
 
-        run('xcrun', ['stapler', 'staple', out])
-        run('spctl', ['--assess', '-vv', '--type', 'open', '--context', 'context:primary-signature', out])
+        run('xcrun', ['stapler', 'staple', app])
+        run('spctl', ['--assess', '-vv', '--type', 'exec', app])
       }
 
-      copyFileSync(out, dmg)
+      rmSync(zip)
+      run('ditto', ['-c', '-k', '--keepParent', app, zip])
     }
   } finally {
     probe('security', ['delete-keychain', keychain])
