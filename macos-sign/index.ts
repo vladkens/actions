@@ -6,6 +6,21 @@ import { join } from 'node:path'
 import { bool, fail, input, logText, main, mask, notice, probe, run } from '../lib/core.ts'
 import { identity } from './sign.ts'
 
+// notarytool's JSON answer, empty when it has none (its error is in the log).
+function notarytool(args: string[]): { id?: string; status?: string } {
+  console.log(`$ xcrun notarytool ${args[0]} ${args[1]}`)
+  const out = spawnSync('xcrun', ['notarytool', ...args, '--output-format', 'json'], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'inherit'],
+  }).stdout
+  try {
+    return JSON.parse(out)
+  } catch {
+    logText(out ?? '')
+    return {}
+  }
+}
+
 // Apple's intermediate for Developer ID certificates, which a runner's keychains may lack.
 const G2 = 'https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer'
 const G2_SHA256 = 'f16cd3c54c7f83cea4bf1a3e6a0819c8aaa8e4a1528fd144715f350643d2df3a'
@@ -72,19 +87,15 @@ await main(async () => {
       if (key) {
         const upload = join(dir, 'notarize.zip')
         run('ditto', ['-c', '-k', '--keepParent', app, upload])
-        console.log(`$ xcrun notarytool submit ${upload} --wait`)
-        const args = ['notarytool', 'submit', upload, ...notary, '--wait', '--output-format', 'json']
-        const out = spawnSync('xcrun', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }).stdout
-        let result: { id?: string; status?: string } = {}
-        try {
-          result = JSON.parse(out)
-        } catch {
-          logText(out ?? '')
-        }
+        // The submission's id first, so one Apple takes long over can be looked up later.
+        const submitted = notarytool(['submit', upload, ...notary])
+        if (!submitted.id) fail(`${zip}: the upload to Apple failed`)
 
+        console.log(`notarization: ${submitted.id}`)
+        const result = notarytool(['wait', submitted.id, ...notary, '--timeout', '20m'])
         if (result.status !== 'Accepted') {
-          if (result.id) logText(probe('xcrun', ['notarytool', 'log', result.id, ...notary]) ?? '')
-          fail(`${zip}: notarization ${result.status ?? 'failed'}`)
+          logText(probe('xcrun', ['notarytool', 'log', submitted.id, ...notary]) ?? '')
+          fail(`${zip}: notarization ${submitted.id} ${result.status ?? 'not finished in 20 minutes'}`)
         }
 
         run('xcrun', ['stapler', 'staple', app])
