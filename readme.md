@@ -182,6 +182,15 @@ jobs:
 - The readme becomes the PyPI page: link images by absolute URL.
 - Inputs: `py-build/action.yml`, `py-publish/action.yml`.
 
+## Tools
+
+[tools.yml](.github/workflows/tools.yml), run by hand, builds static Linux x86_64 `dmg` and
+`hfsplus` from [mozilla/libdmg-hfsplus](https://github.com/mozilla/libdmg-hfsplus) at a pinned
+commit, for making macOS disk images on Linux, checks them on an HFS+ image, and releases them
+here as `tools-<yyyymmdd>` with the LICENSE and a `SHA256SUMS`. Their users (nimbo's pack.py) pin
+the hashes; a new build is a new release, and a day's release is never rebuilt:
+`gh workflow run tools.yml`.
+
 ## Development
 
 [agents.md](agents.md) has the rules; `make check` type-checks and runs the unit tests;
