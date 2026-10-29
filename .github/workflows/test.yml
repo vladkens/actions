@@ -412,13 +412,38 @@ jobs:
           artifact: release-nodev
           dev-tag: ${{ env.TAG }}-nodev
           dev-branch: ${{ github.ref_name }}
+      # A pack command's files and update.txt, not its subfolders; then a file it names wrong.
+      - run: rm -rf target/distrib # nodev's marker
+      - id: pack
+        uses: ./rust-publish
+        with:
+          name: fixture
+          crates: false
+          artifact: release-test
+          dev-tag: ${{ env.TAG }}-pack
+          dev-branch: ${{ github.ref_name }}
+          pack: |
+            cd target/distrib
+            mkdir bin && mv fixture-dev-a.txt bin/ && tar czf fixture-dev-x.tar.gz bin
+            echo "$LABEL|$TAG" > update.txt
+      - id: pack-wrong
+        continue-on-error: true
+        uses: ./rust-publish
+        with:
+          name: fixture
+          crates: false
+          artifact: release-test
+          dev-tag: ${{ env.TAG }}-pack
+          dev-branch: ${{ github.ref_name }}
+          pack: touch target/distrib/other-dev-a.txt
       - env:
           WRONG: ${{ steps.wrong-name.outcome }}
           FILES: ${{ steps.publish.outputs.files }}
           RELEASED: ${{ steps.publish.outputs.tag }}
           NODEV: ${{ steps.nodev.outcome }}
+          PACK_WRONG: ${{ steps.pack-wrong.outcome }}
         run: |
-          test "$WRONG" = failure
+          test "$WRONG $PACK_WRONG" = "failure failure"
           if [ "$GITHUB_EVENT_NAME" = push ]; then
             test "$NODEV" = success
             if gh release view "$TAG-nodev" > /dev/null 2>&1; then exit 1; fi
@@ -429,77 +454,13 @@ jobs:
           # Signed by this repo's own workflow: no signer flags needed.
           gh release download "$TAG" --pattern fixture-dev-a.txt --dir "$RUNNER_TEMP"
           gh attestation verify "$RUNNER_TEMP/fixture-dev-a.txt" -R "$GITHUB_REPOSITORY"
+          test "$(gh release view "$TAG-pack" --json assets --jq '[.assets[].name] | sort | join(",")')" = "fixture-dev-x.tar.gz,update.txt"
+          test "$(gh release download "$TAG-pack" --pattern update.txt --output -)" = "dev|"
       - if: always()
         run: |
           gh release delete "$TAG" --cleanup-tag --yes || true
           gh release delete "$TAG-nodev" --cleanup-tag --yes || true
-
-  # rust-build's bare binaries → rust-publish's pack, as a nimbo app's release uses them: a dry
-  # run, so pull requests run it too.
-  rust-publish-pack:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./rust-build
-        with:
-          dist: mkdir -p target/distrib/x86_64-unknown-linux-gnu && echo bin > target/distrib/x86_64-unknown-linux-gnu/fixture-bin
-          cache: false
-          dev-version: false
-          dev: true
-          artifact: release-pack
-      - run: |
-          rm -rf target
-          cp -R tests/fixtures/crate/. . # a root package for `cargo metadata`
-      - id: pack
-        uses: ./rust-publish
-        with:
-          name: fixture
-          crates: false
-          artifact: release-pack
-          dry-run: true
-          pack: |
-            cd target/distrib
-            tar czf "fixture-$LABEL-x86_64-unknown-linux-gnu.tar.gz" -C x86_64-unknown-linux-gnu fixture-bin
-            echo "$LABEL|$TAG|$SECRET|$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')" > update.txt
-        env:
-          SECRET: from-the-step
-      - env:
-          FILES: ${{ steps.pack.outputs.files }}
-          RELEASED: ${{ steps.pack.outputs.tag }}
-        run: |
-          (cd target/distrib && test "$(echo *)" = "fixture-dev-x86_64-unknown-linux-gnu.tar.gz update.txt x86_64-unknown-linux-gnu")
-          IFS='|' read -r label tag secret version < target/distrib/update.txt
-          test "$label|$tag|$secret" = "dev||from-the-step"
-          test "$version" = 0.1.0
-          test "$(tar xzOf target/distrib/fixture-dev-x86_64-unknown-linux-gnu.tar.gz fixture-bin)" = bin
-          test -z "$FILES$RELEASED"
-
-      # A file not named `<name>-<LABEL>-*`, or no file at all: refused.
-      - run: rm -rf target/distrib
-      - id: wrong-name
-        continue-on-error: true
-        uses: ./rust-publish
-        with:
-          name: fixture
-          crates: false
-          artifact: release-pack
-          dry-run: true
-          pack: echo x > target/distrib/other-dev-a.txt
-      - run: rm -rf target/distrib
-      - id: no-files
-        continue-on-error: true
-        uses: ./rust-publish
-        with:
-          name: fixture
-          crates: false
-          artifact: release-pack
-          dry-run: true
-          pack: 'true'
-      - env:
-          OUTCOMES: ${{ steps.wrong-name.outcome }} ${{ steps.no-files.outcome }}
-        run: |
-          test "$OUTCOMES" = "failure failure"
-          test -f target/distrib/x86_64-unknown-linux-gnu/fixture-bin # downloaded: the check refused it
+          gh release delete "$TAG-pack" --cleanup-tag --yes || true
 
   # py-build → py-publish on a package fixture. Outside a release commit py-publish does nothing;
   # the release path is proven by the first release of a repo using them.

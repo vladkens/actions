@@ -26,15 +26,12 @@ inputs:
     description: The branch whose pushes update the dev pre-release; the default branch when empty.
     default: ''
   pack:
-    description: A command that makes the release files from rust-build's, run in the checkout after the download with `LABEL` (`dev` or the tag) and `TAG` (empty for dev) plus the step's own env; the files it leaves at the top of target/distrib, named `<name>-<LABEL>-*` or `update.txt`, are published as they are. Must not compile.
+    description: A command that makes the release files from rust-build's, run in the checkout after the download with `LABEL` (`dev` or the tag) and `TAG` (empty for dev) plus the step's own env; the files it leaves at the top of target/distrib, named `<name>-dev-*` like rust-build's or `update.txt`, are published, its subfolders are not. Must not compile.
     default: ''
-  dry-run:
-    description: Everything up to publishing (as a dev build on any event that isn't a release), nothing published; for tests.
-    default: 'false'
 outputs:
   tag:
     description: The released tag; empty when this run released nothing.
-    value: ${{ inputs.dry-run != 'true' && steps.check.outputs.tag || '' }}
+    value: ${{ steps.check.outputs.tag }}
   files:
     description: The published files' local paths, one per line.
     value: ${{ steps.release.outputs.files || steps.dev.outputs.files }}
@@ -55,18 +52,12 @@ runs:
         DEV: ${{ inputs.dev }}
         NAME: ${{ inputs.name || github.event.repository.name }}
         PRIVATE: ${{ github.event.repository.private }}
-        DRY_RUN: ${{ inputs.dry-run }}
       run: |
         mode=none
         if [ "$RELEASE" = true ]; then
           mode=release
         elif [ "$DEV" = true ] && { [ "$EVENT" = push ] || [ "$EVENT" = workflow_dispatch ]; } && [ "$GITHUB_REF_NAME" = "$DEV_BRANCH" ]; then
           mode=dev
-        elif [ "$DRY_RUN" = true ]; then
-          mode=dev
-        fi
-        if [ "$DRY_RUN" = true ]; then
-          echo "rust-publish: a dry run, nothing will be published"
         fi
         echo "mode=$mode" >> "$GITHUB_OUTPUT"
         echo "name=$NAME" >> "$GITHUB_OUTPUT"
@@ -75,7 +66,7 @@ runs:
           echo "::notice::private repo: no attestations (GitHub offers them there only on Enterprise Cloud)"
         fi
 
-    # A release commit is checked first: its tag names the pack command's files.
+    # A release commit is checked first: the pack command gets its tag.
     - id: check
       if: steps.mode.outputs.mode == 'release'
       uses: $/release-check
@@ -110,60 +101,51 @@ runs:
       name: Check the files
       shell: bash
       env:
-        PREFIX: ${{ inputs.pack != '' && format('{0}-{1}-', steps.mode.outputs.name, steps.check.outputs.tag || 'dev') || format('{0}-dev', steps.mode.outputs.name) }}
-        PACK: ${{ inputs.pack != '' }}
-      # After a pack command also update.txt, its subfolders (the binaries it packed) skipped.
+        PREFIX: ${{ steps.mode.outputs.name }}-dev
+        PACK: ${{ inputs.pack }}
       run: |
-        count=0
         for f in target/distrib/* target/distrib/.[!.]*; do
           [ -e "$f" ] || [ -L "$f" ] || continue
           name=${f#target/distrib/}
-          if [ "$PACK" = true ] && [ -d "$f" ] && [ ! -L "$f" ]; then
+          # A pack command's subfolders (the binaries it packed) aren't published; its update.txt is.
+          if [ -n "$PACK" ] && [ ! -L "$f" ] && { [ -d "$f" ] || [ "$name" = update.txt ]; }; then
             continue
           fi
 
-          if [ -L "$f" ] || [ ! -f "$f" ] || { [[ "$name" != "$PREFIX"* ]] && { [ "$PACK" != true ] || [ "$name" != update.txt ]; }; }; then
+          if [ -L "$f" ] || [ ! -f "$f" ] || [[ "$name" != "$PREFIX"* ]]; then
             echo "::error::unexpected '$name' in the release files: expected regular files named '$PREFIX*'"
             exit 1
           fi
-
-          count=$((count + 1))
         done
-
-        if [ "$PACK" = true ] && [ "$count" = 0 ]; then
-          echo "::error::the pack command left no release files in target/distrib: expected '$PREFIX*'"
-          exit 1
-        fi
 
     # A release commit: crates.io, the tag and the GitHub release.
     # https://crates.io/docs/trusted-publishing
     - id: auth
-      if: steps.mode.outputs.mode == 'release' && inputs.crates == 'true' && inputs.dry-run != 'true'
+      if: steps.mode.outputs.mode == 'release' && inputs.crates == 'true'
       uses: rust-lang/crates-io-auth-action@v1
-    - if: steps.mode.outputs.mode == 'release' && inputs.crates == 'true' && inputs.dry-run != 'true'
+    - if: steps.mode.outputs.mode == 'release' && inputs.crates == 'true'
       uses: $/crates-publish
       with:
         token: ${{ steps.auth.outputs.token }}
         no-verify: true # rust-build ran the dry run; this job never compiles
     - id: release
-      if: steps.mode.outputs.mode == 'release' && inputs.dry-run != 'true'
+      if: steps.mode.outputs.mode == 'release'
       uses: $/github-release
       with:
         tag: ${{ steps.check.outputs.tag }}
         notes: ${{ steps.check.outputs.notes }}
         files: ${{ inputs.files == 'true' && 'target/distrib/*' || '' }}
-        # A pack command's files are named for the release already.
-        rename-from: ${{ inputs.pack == '' && format('{0}-dev', steps.mode.outputs.name) || '' }}
-        rename-to: ${{ inputs.pack == '' && format('{0}-{1}', steps.mode.outputs.name, steps.check.outputs.tag) || '' }}
+        rename-from: ${{ steps.mode.outputs.name }}-dev
+        rename-to: ${{ steps.mode.outputs.name }}-${{ steps.check.outputs.tag }}
     # Attestations need a public repo (or Enterprise Cloud): a private one skips them.
-    - if: steps.release.outcome == 'success' && inputs.files == 'true' && !github.event.repository.private
+    - if: steps.mode.outputs.mode == 'release' && inputs.files == 'true' && !github.event.repository.private
       uses: actions/attest@v4
       with:
         subject-path: ${{ steps.release.outputs.files }}
 
     # Any other push to the dev branch: the rolling pre-release.
     - id: dev
-      if: steps.mode.outputs.mode == 'dev' && steps.built.outputs.files == 'true' && inputs.dry-run != 'true'
+      if: steps.mode.outputs.mode == 'dev' && steps.built.outputs.files == 'true'
       uses: $/dev-release
       with:
         tag: ${{ inputs.dev-tag }}

@@ -100,8 +100,9 @@ jobs:
   and disk image, installers, an update feed. It runs in the checkout after the download, with
   `LABEL` (`dev`, or the tag on a release, which release-check has checked by then), `TAG` (empty
   for dev) and the step's `env`, its secrets included. The files it leaves at the top of
-  `target/distrib`, named `<name>-<LABEL>-*` or `update.txt`, are published as they are, with no
-  rename; its subfolders are not. Like the rest of the job it must not compile.
+  `target/distrib` keep rust-build's `<name>-dev-*` names and are renamed on a release like
+  theirs; `update.txt` is published as it is, and its subfolders are not. Like the rest of the job
+  it must not compile.
 
   ```yaml
       - uses: vladkens/actions/rust-publish@v1
@@ -110,8 +111,6 @@ jobs:
         env:
           SIGN_KEY: ${{ secrets.SIGN_KEY }}
   ```
-
-  `dry-run: true` runs it all up to publishing on any event, as a dev build, and publishes nothing.
 - A macOS app is signed and notarized in `publish` by its `pack` command, with the certificate
   and the API key in the step's `env`.
 - Keep the workflow's `concurrency` queueing default-branch runs (not cancelling them), so two
