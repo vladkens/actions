@@ -1,8 +1,8 @@
 # macos-sign
 
-Signs the `.app` in each zipped macOS release file with a Developer ID, notarizes it with an App Store Connect API key and staples the ticket, then zips it again under the same name. The signature gets the hardened runtime, a secure timestamp and the entitlements file from the checkout: the artifact comes from a job where dependencies' build scripts ran, so nothing but its bytes is trusted. Without `certificate` (a fork, a pull request) it leaves the files as they are; without the API key it signs and doesn't notarize. It signs the bundle itself: nested code (helpers, frameworks) is signed by the app's own bundling, or notarization refuses it.
+Two steps. `sign` puts the Developer ID certificate into a keychain of the run's own and signs the `.app` in each zipped macOS release file, zipped again under the same name; its output `identity` (the SHA-1) signs what steps after it make, a disk image of the app say. `notarize` notarizes each file, a .zip or a .dmg, with an App Store Connect API key and staples the ticket (to a disk image itself, to the app in a zip), then deletes the keychain; `cleanup` with `if: always()` deletes it when a step failed before. The app's signature gets the hardened runtime, a secure timestamp and the entitlements file from the checkout: the artifact comes from a job where dependencies' build scripts ran, so nothing but its bytes is trusted. Without `certificate` or the API key (a fork, a pull request) the files stay as they are. It signs the bundle itself: nested code (helpers, frameworks) is signed by the app's own bundling, or notarization refuses it.
 
-It never compiles: run it in a job of its own between rust-build and rust-publish, so no dependency's build script (or a process one left running) is where the certificate is. Keep the secrets in a GitHub Environment limited to the default branch, sign release commits only, and pin the job's actions by commit. The certificate goes into a keychain of the run's own, deleted at the end. Needs a macOS runner and no permissions.
+It never compiles: run it in a job of its own between rust-build and rust-publish, so no dependency's build script (or a process one left running) is where the certificate is. Keep the secrets in a GitHub Environment limited to the default branch, sign release commits only, and pin the job's actions by commit. Needs a macOS runner and no permissions.
 
 Inputs: [action.yml](action.yml).
 
@@ -25,16 +25,29 @@ Inputs: [action.yml](action.yml).
         with:
           name: release # rust-build's `artifact`: the macOS build's, when each OS has its own
           path: target/distrib
-      - uses: vladkens/actions/macos-sign@v1
+      - id: sign
+        uses: vladkens/actions/macos-sign@v1
         with:
+          step: sign
           files: target/distrib/*-macos.zip
           entitlements: assets/app.entitlements
           required: true # a release is never unsigned
           certificate: ${{ secrets.APPLE_CERTIFICATE }} # base64 .p12
           certificate-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      # Here a step may make a disk image of the signed app and sign it with
+      # ${{ steps.sign.outputs.identity }}; notarize it then instead of the zip.
+      - uses: vladkens/actions/macos-sign@v1
+        with:
+          step: notarize
+          files: target/distrib/*-macos.zip
+          required: true
           api-key: ${{ secrets.APPLE_API_KEY }} # the .p8's text
           api-key-id: ${{ secrets.APPLE_API_KEY_ID }}
           api-issuer: ${{ secrets.APPLE_API_ISSUER }}
+      - if: always()
+        uses: vladkens/actions/macos-sign@v1
+        with:
+          step: cleanup
       - uses: actions/upload-artifact@<sha> # v7
         with:
           name: release # the same name: rust-publish gets the signed files

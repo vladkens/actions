@@ -595,12 +595,12 @@ jobs:
           plutil -create xml1 T.app/Contents/Info.plist
           plutil -insert CFBundleExecutable -string T T.app/Contents/Info.plist
           plutil -insert CFBundleIdentifier -string test.macos-sign T.app/Contents/Info.plist
-          # plutil takes a key's dots for a path.
-          printf '<plist version="1.0"><dict><key>%s</key><true/></dict></plist>\n' \
-            com.apple.security.device.audio-input > ent.plist
           codesign --force --sign - T.app
           ditto -c -k --keepParent T.app dist/T.zip
           cp dist/T.zip unsigned.zip
+          # plutil takes a key's dots for a path.
+          printf '<plist version="1.0"><dict><key>%s</key><true/></dict></plist>\n' \
+            com.apple.security.device.audio-input > ent.plist
           /usr/bin/openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=macos-sign test" \
             -addext keyUsage=critical,digitalSignature -addext extendedKeyUsage=critical,codeSigning \
             -keyout key.pem -out cert.pem
@@ -608,10 +608,13 @@ jobs:
           echo "P12=$(base64 -i id.p12 | tr -d '\n')" >> "$GITHUB_ENV"
       - uses: ./macos-sign
         with:
+          step: sign
           files: dist/*.zip
       - run: cmp dist/T.zip unsigned.zip
-      - uses: ./macos-sign
+      - id: sign
+        uses: ./macos-sign
         with:
+          step: sign
           files: dist/*.zip
           entitlements: ent.plist
           certificate: ${{ env.P12 }}
@@ -623,4 +626,27 @@ jobs:
           grep -q 'Authority=macos-sign test' info.txt
           grep -q 'flags=0x10000(runtime)' info.txt
           codesign -d --entitlements - --xml out/T.app | grep -q audio-input
-          ! security list-keychains -d user | grep -q macos-sign
+      # A disk image of the signed app, signed between the two steps with the identity, as a
+      # release's is.
+      - env:
+          IDENTITY: ${{ steps.sign.outputs.identity }}
+        run: |
+          test -n "$IDENTITY"
+          mkdir stage
+          ditto -x -k dist/T.zip stage
+          ln -s /Applications stage/Applications
+          hdiutil create -volname T -srcfolder stage -format UDZO dist/T.dmg
+          codesign --force --sign "$IDENTITY" --timestamp dist/T.dmg
+          codesign -dv --verbose=2 dist/T.dmg 2>&1 | grep -q 'Authority=macos-sign test'
+      # No API key here: a notice, and the keychain gone.
+      - uses: ./macos-sign
+        with:
+          step: notarize
+          files: |
+            dist/*.zip
+            dist/*.dmg
+      - run: '! security list-keychains -d user | grep -q macos-sign'
+      - if: always()
+        uses: ./macos-sign
+        with:
+          step: cleanup

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { identity } from '../macos-sign/sign.ts'
+import { assess, identity } from '../macos-sign/sign.ts'
 
 test('the first identity, trusted or not', () => {
   const listing = [
@@ -16,4 +16,17 @@ test('the first identity, trusted or not', () => {
   })
   assert.equal(identity('  1) 200896BC436E0945447BF36C669C0877C83CFD93 "x" (CSSMERR_TP_NOT_TRUSTED)')?.name, 'x')
   assert.equal(identity('     0 identities found'), undefined)
+})
+
+test('gatekeeper opens a disk image and runs an app', () => {
+  assert.deepEqual(assess('dist/T.dmg'), [
+    '--assess',
+    '-vv',
+    '--type',
+    'open',
+    '--context',
+    'context:primary-signature',
+    'dist/T.dmg',
+  ])
+  assert.deepEqual(assess('/tmp/x/T.app'), ['--assess', '-vv', '--type', 'exec', '/tmp/x/T.app'])
 })
