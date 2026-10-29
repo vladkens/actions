@@ -99,10 +99,9 @@ jobs:
   files (bare binaries in `target/distrib/<target>/` from a `dist` command, say): an app's .app
   and disk image, installers, an update feed. It runs in the checkout after the download, with
   `LABEL` (`dev`, or the tag on a release, which release-check has checked by then), `TAG` (empty
-  for dev) and the step's `env`, its secrets included; a dev build's version is stamped first, so
-  `cargo metadata` reports it (`dev-version: false` when rust-build's is off). The files it leaves at the top of `target/distrib`, named
-  `<name>-<LABEL>-*` or `update.txt`, are published as they are, with no rename; its subfolders
-  are not. Like the rest of the job it must not compile.
+  for dev) and the step's `env`, its secrets included. The files it leaves at the top of
+  `target/distrib`, named `<name>-<LABEL>-*` or `update.txt`, are published as they are, with no
+  rename; its subfolders are not. Like the rest of the job it must not compile.
 
   ```yaml
       - uses: vladkens/actions/rust-publish@v1
@@ -113,9 +112,8 @@ jobs:
   ```
 
   `dry-run: true` runs it all up to publishing on any event, as a dev build, and publishes nothing.
-- A macOS app gets its Developer ID signature and notarization from
-  [macos-sign](macos-sign/readme.md), in a job between `build` and `publish` that never compiles;
-  `publish` then needs it too.
+- A macOS app is signed and notarized in `publish` by its `pack` command, with the certificate
+  and the API key in the step's `env`.
 - Keep the workflow's `concurrency` queueing default-branch runs (not cancelling them), so two
   dev updates don't overlap.
 - A Homebrew formula follows a release with one more step in `publish`, after

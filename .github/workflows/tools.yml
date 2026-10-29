@@ -9,11 +9,6 @@ on:
 permissions:
   contents: read
 
-# One at a time: a run's draft release is never taken for an interrupted one's.
-concurrency:
-  group: tools
-  cancel-in-progress: false
-
 env:
   # https://github.com/mozilla/libdmg-hfsplus, its default branch's head on 2026-10-29.
   LIBDMG: e18579b391950589b9ed16ee630c54ce4319bb29
@@ -30,17 +25,12 @@ jobs:
         run: |
           tag=tools-$(date -u +%Y%m%d)
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          draft=$(gh release view "$tag" -R "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2> /dev/null || true)
-          if [ "$draft" = true ]; then
-            echo "$tag: a draft left by an interrupted run, deleted"
-            gh release delete "$tag" -R "$GITHUB_REPOSITORY" --yes
-          elif [ -n "$draft" ]; then
-            echo "::notice::$tag is released already: nothing to do (delete it to build again)"
-            echo "exists=true" >> "$GITHUB_OUTPUT"
+          if gh release view "$tag" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "::error::$tag is released already: a day's release is never rebuilt"
+            exit 1
           fi
 
-      - if: steps.tag.outputs.exists != 'true'
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           repository: mozilla/libdmg-hfsplus
           ref: ${{ env.LIBDMG }}
@@ -48,8 +38,7 @@ jobs:
           persist-credentials: false
 
       # Static: zlib, bzip2 and lzma linked in; no OpenSSL (FileVault images only) or lzfse.
-      - if: steps.tag.outputs.exists != 'true'
-        name: Build
+      - name: Build
         run: |
           sudo apt-get update -q
           sudo apt-get install -yq --no-install-recommends cmake zlib1g-dev libbz2-dev liblzma-dev
@@ -65,8 +54,7 @@ jobs:
           done
 
       # A file into an HFS+ image, the image into a zlib dmg and back.
-      - if: steps.tag.outputs.exists != 'true'
-        name: Check
+      - name: Check
         working-directory: ${{ runner.temp }}
         env:
           OUT: ${{ github.workspace }}/out
@@ -80,8 +68,7 @@ jobs:
           test "$("$OUT/hfsplus" back.hfs cat /hello.txt)" = hello
 
       # On the default branch's head: GITHUB_TOKEN can't tag a commit whose workflows differ from it.
-      - if: steps.tag.outputs.exists != 'true'
-        name: Release
+      - name: Release
         working-directory: out
         env:
           TAG: ${{ steps.tag.outputs.tag }}

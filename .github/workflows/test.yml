@@ -447,10 +447,9 @@ jobs:
           dev-version: false
           dev: true
           artifact: release-pack
-      # dev-version stamps the root package: the crate fixture's here.
       - run: |
           rm -rf target
-          cp -R tests/fixtures/crate/. .
+          cp -R tests/fixtures/crate/. . # a root package for `cargo metadata`
       - id: pack
         uses: ./rust-publish
         with:
@@ -471,7 +470,7 @@ jobs:
           (cd target/distrib && test "$(echo *)" = "fixture-dev-x86_64-unknown-linux-gnu.tar.gz update.txt x86_64-unknown-linux-gnu")
           IFS='|' read -r label tag secret version < target/distrib/update.txt
           test "$label|$tag|$secret" = "dev||from-the-step"
-          test "$version" = "$(git describe --tags --match 'v[0-9]*.[0-9]*.[0-9]*' | sed 's/^v//')"
+          test "$version" = 0.1.0
           test "$(tar xzOf target/distrib/fixture-dev-x86_64-unknown-linux-gnu.tar.gz fixture-bin)" = bin
           test -z "$FILES$RELEASED"
 

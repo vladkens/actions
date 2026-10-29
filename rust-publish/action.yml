@@ -28,9 +28,6 @@ inputs:
   pack:
     description: A command that makes the release files from rust-build's, run in the checkout after the download with `LABEL` (`dev` or the tag) and `TAG` (empty for dev) plus the step's own env; the files it leaves at the top of target/distrib, named `<name>-<LABEL>-*` or `update.txt`, are published as they are. Must not compile.
     default: ''
-  dev-version:
-    description: In dev, stamp the version `git describe` gives before `pack`, as rust-build's `dev-version` did for the binaries; `false` when that is off.
-    default: 'true'
   dry-run:
     description: Everything up to publishing (as a dev build on any event that isn't a release), nothing published; for tests.
     default: 'false'
@@ -101,9 +98,6 @@ runs:
         else
           echo "files=true" >> "$GITHUB_OUTPUT"
         fi
-    # A dev build's version is stamped before the pack command, so its `cargo metadata` reads it.
-    - if: steps.built.outputs.files == 'true' && inputs.pack != '' && steps.mode.outputs.mode == 'dev' && inputs.dev-version == 'true'
-      uses: $/dev-version
     - if: steps.built.outputs.files == 'true' && inputs.pack != ''
       name: Pack the release files
       shell: bash
@@ -118,7 +112,28 @@ runs:
       env:
         PREFIX: ${{ inputs.pack != '' && format('{0}-{1}-', steps.mode.outputs.name, steps.check.outputs.tag || 'dev') || format('{0}-dev', steps.mode.outputs.name) }}
         PACK: ${{ inputs.pack != '' }}
-      run: bash "$GITHUB_ACTION_PATH/files.sh" target/distrib "$PREFIX" "$PACK"
+      # After a pack command also update.txt, its subfolders (the binaries it packed) skipped.
+      run: |
+        count=0
+        for f in target/distrib/* target/distrib/.[!.]*; do
+          [ -e "$f" ] || [ -L "$f" ] || continue
+          name=${f#target/distrib/}
+          if [ "$PACK" = true ] && [ -d "$f" ] && [ ! -L "$f" ]; then
+            continue
+          fi
+
+          if [ -L "$f" ] || [ ! -f "$f" ] || { [[ "$name" != "$PREFIX"* ]] && { [ "$PACK" != true ] || [ "$name" != update.txt ]; }; }; then
+            echo "::error::unexpected '$name' in the release files: expected regular files named '$PREFIX*'"
+            exit 1
+          fi
+
+          count=$((count + 1))
+        done
+
+        if [ "$PACK" = true ] && [ "$count" = 0 ]; then
+          echo "::error::the pack command left no release files in target/distrib: expected '$PREFIX*'"
+          exit 1
+        fi
 
     # A release commit: crates.io, the tag and the GitHub release.
     # https://crates.io/docs/trusted-publishing
