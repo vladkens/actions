@@ -96,7 +96,8 @@ runs:
         PACK: ${{ inputs.pack }}
         LABEL: ${{ steps.check.outputs.tag || 'dev' }}
         TAG: ${{ steps.check.outputs.tag }}
-      run: eval "$PACK"
+      # Its own bash with the step's -e and pipefail; LABEL, TAG and the step env are exported to it.
+      run: bash -eo pipefail -c "$PACK"
     - if: steps.built.outputs.files == 'true'
       name: Check the files
       shell: bash
@@ -108,7 +109,12 @@ runs:
           [ -e "$f" ] || [ -L "$f" ] || continue
           name=${f#target/distrib/}
           # A pack command's subfolders (the binaries it packed) aren't published; its update.txt is.
-          if [ -n "$PACK" ] && [ ! -L "$f" ] && { [ -d "$f" ] || [ "$name" = update.txt ]; }; then
+          # A symlink is never skipped: the check below refuses it.
+          if [ -n "$PACK" ] && [ -d "$f" ] && [ ! -L "$f" ]; then
+            continue
+          fi
+
+          if [ -n "$PACK" ] && [ "$name" = update.txt ] && [ ! -L "$f" ]; then
             continue
           fi
 
