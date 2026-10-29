@@ -1,0 +1,82 @@
+name: tools
+
+# Static Linux x86_64 builds of mozilla/libdmg-hfsplus's `dmg` and `hfsplus`, for making macOS disk
+# images on Linux (nimbo's pack.py, which pins their hashes), released as `tools-<yyyymmdd>` with a
+# SHA256SUMS. Run by hand; a day's release is never rebuilt.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # https://github.com/mozilla/libdmg-hfsplus, its default branch's head on 2026-10-29.
+  LIBDMG: e18579b391950589b9ed16ee630c54ce4319bb29
+
+jobs:
+  libdmg-hfsplus:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - id: tag
+        run: |
+          tag=tools-$(date -u +%Y%m%d)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if gh release view "$tag" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "::error::$tag is released already: a day's release is never rebuilt"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+        with:
+          repository: mozilla/libdmg-hfsplus
+          ref: ${{ env.LIBDMG }}
+          path: libdmg
+          persist-credentials: false
+
+      # Static: zlib, bzip2 and lzma linked in; no OpenSSL (FileVault images only) or lzfse.
+      - name: Build
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq --no-install-recommends cmake zlib1g-dev libbz2-dev liblzma-dev
+          cmake -S libdmg -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON \
+            -DCMAKE_EXE_LINKER_FLAGS=-static -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON
+          make -C build -j"$(nproc)" dmg-bin hfsplus
+          mkdir out
+          cp build/dmg/dmg build/hfs/hfsplus libdmg/LICENSE out/
+          strip out/dmg out/hfsplus
+          for bin in out/dmg out/hfsplus; do
+            file "$bin"
+            file "$bin" | grep -q 'statically linked'
+          done
+
+      # A file into an HFS+ image, the image into a zlib dmg and back.
+      - name: Check
+        working-directory: ${{ runner.temp }}
+        env:
+          OUT: ${{ github.workspace }}/out
+        run: |
+          cp "$GITHUB_WORKSPACE/libdmg/test/empty.hfs" t.hfs
+          echo hello > hello.txt
+          "$OUT/hfsplus" t.hfs add hello.txt hello.txt
+          "$OUT/dmg" -c zlib build t.hfs t.dmg
+          "$OUT/dmg" extract t.dmg back.hfs
+          cmp t.hfs back.hfs
+          test "$("$OUT/hfsplus" back.hfs cat /hello.txt)" = hello
+
+      # On the default branch's head: GITHUB_TOKEN can't tag a commit whose workflows differ from it.
+      - name: Release
+        working-directory: out
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          TARGET: ${{ github.event.repository.default_branch }}
+          SOURCE: https://github.com/mozilla/libdmg-hfsplus/tree/${{ env.LIBDMG }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          sha256sum dmg hfsplus LICENSE | tee SHA256SUMS
+          printf '%s\n' "Static Linux x86_64 builds of \`dmg\` and \`hfsplus\` from mozilla/libdmg-hfsplus at $SOURCE (GPL-3.0, its LICENSE attached), on ubuntu-22.04 by $RUN." > notes.md
+          gh release create "$TAG" dmg hfsplus LICENSE SHA256SUMS -R "$GITHUB_REPOSITORY" \
+            --target "$TARGET" --title "$TAG" --notes-file notes.md

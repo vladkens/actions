@@ -25,6 +25,9 @@ inputs:
   dev-branch:
     description: The branch whose pushes update the dev pre-release; the default branch when empty.
     default: ''
+  pack:
+    description: A command that makes the release files from rust-build's, run in the checkout after the download with `LABEL` (`dev` or the tag) and `TAG` (empty for dev) plus the step's own env; the files it leaves at the top of target/distrib, named `<name>-dev-*` like rust-build's or `update.txt`, are published, its subfolders are not. Must not compile.
+    default: ''
 outputs:
   tag:
     description: The released tag; empty when this run released nothing.
@@ -63,6 +66,12 @@ runs:
           echo "::notice::private repo: no attestations (GitHub offers them there only on Enterprise Cloud)"
         fi
 
+    # A release commit is checked first: the pack command gets its tag.
+    - id: check
+      if: steps.mode.outputs.mode == 'release'
+      uses: $/release-check
+      with:
+        releasers: ${{ inputs.releasers }}
     - id: download
       if: steps.mode.outputs.mode != 'none' && inputs.files == 'true'
       uses: actions/download-artifact@v8
@@ -80,15 +89,35 @@ runs:
         else
           echo "files=true" >> "$GITHUB_OUTPUT"
         fi
+    - if: steps.built.outputs.files == 'true' && inputs.pack != ''
+      name: Pack the release files
+      shell: bash
+      env:
+        PACK: ${{ inputs.pack }}
+        LABEL: ${{ steps.check.outputs.tag || 'dev' }}
+        TAG: ${{ steps.check.outputs.tag }}
+      # Its own bash with the step's -e and pipefail; LABEL, TAG and the step env are exported to it.
+      run: bash -eo pipefail -c "$PACK"
     - if: steps.built.outputs.files == 'true'
       name: Check the files
       shell: bash
       env:
         PREFIX: ${{ steps.mode.outputs.name }}-dev
+        PACK: ${{ inputs.pack }}
       run: |
         for f in target/distrib/* target/distrib/.[!.]*; do
           [ -e "$f" ] || [ -L "$f" ] || continue
           name=${f#target/distrib/}
+          # A pack command's subfolders (the binaries it packed) aren't published; its update.txt is.
+          # A symlink is never skipped: the check below refuses it.
+          if [ -n "$PACK" ] && [ -d "$f" ] && [ ! -L "$f" ]; then
+            continue
+          fi
+
+          if [ -n "$PACK" ] && [ "$name" = update.txt ] && [ ! -L "$f" ]; then
+            continue
+          fi
+
           if [ -L "$f" ] || [ ! -f "$f" ] || [[ "$name" != "$PREFIX"* ]]; then
             echo "::error::unexpected '$name' in the release files: expected regular files named '$PREFIX*'"
             exit 1
@@ -96,11 +125,6 @@ runs:
         done
 
     # A release commit: crates.io, the tag and the GitHub release.
-    - id: check
-      if: steps.mode.outputs.mode == 'release'
-      uses: $/release-check
-      with:
-        releasers: ${{ inputs.releasers }}
     # https://crates.io/docs/trusted-publishing
     - id: auth
       if: steps.mode.outputs.mode == 'release' && inputs.crates == 'true'

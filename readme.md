@@ -95,9 +95,24 @@ jobs:
 - Inputs: `rust-build/action.yml`, `rust-publish/action.yml`. A crate without binaries drops
   `targets` and sets `files: false` on rust-publish; `crates: false` skips crates.io. Output `tag` is the released tag, empty otherwise, for steps after it (a
   Homebrew formula, say).
-- A macOS app gets its Developer ID signature and notarization from
-  [macos-sign](macos-sign/readme.md), in a job between `build` and `publish` that never compiles;
-  `publish` then needs it too.
+- `pack: <command>` on rust-publish makes the release files there instead, from rust-build's
+  files (bare binaries in `target/distrib/<target>/` from a `dist` command, say): an app's .app
+  and disk image, installers, an update feed. It runs in the checkout after the download, with
+  `LABEL` (`dev`, or the tag on a release, which release-check has checked by then), `TAG` (empty
+  for dev) and the step's `env`, its secrets included. The files it leaves at the top of
+  `target/distrib` keep rust-build's `<name>-dev-*` names and are renamed on a release like
+  theirs; `update.txt` is published as it is, and its subfolders are not. Like the rest of the job
+  it must not compile.
+
+  ```yaml
+      - uses: vladkens/actions/rust-publish@v1
+        with:
+          pack: make pack
+        env:
+          SIGN_KEY: ${{ secrets.SIGN_KEY }}
+  ```
+- A macOS app is signed and notarized in `publish` by its `pack` command, with the certificate
+  and the API key in the step's `env`.
 - Keep the workflow's `concurrency` queueing default-branch runs (not cancelling them), so two
   dev updates don't overlap.
 - A Homebrew formula follows a release with one more step in `publish`, after
@@ -163,6 +178,15 @@ jobs:
 - PyPI's Trusted Publisher names the repo's workflow file (e.g. `main.yml`), with no environment.
 - The readme becomes the PyPI page: link images by absolute URL.
 - Inputs: `py-build/action.yml`, `py-publish/action.yml`.
+
+## Tools
+
+[tools.yml](.github/workflows/tools.yml), run by hand, builds static Linux x86_64 `dmg` and
+`hfsplus` from [mozilla/libdmg-hfsplus](https://github.com/mozilla/libdmg-hfsplus) at a pinned
+commit, for making macOS disk images on Linux, checks them on an HFS+ image, and releases them
+here as `tools-<yyyymmdd>` with the LICENSE and a `SHA256SUMS`. Their users (nimbo's pack.py) pin
+the hashes; a new build is a new release, and a day's release is never rebuilt:
+`gh workflow run tools.yml`.
 
 ## Development
 
