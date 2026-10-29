@@ -25,7 +25,11 @@ jobs:
         run: |
           tag=tools-$(date -u +%Y%m%d)
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          if gh release view "$tag" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+          draft=$(gh release view "$tag" -R "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2> /dev/null || true)
+          if [ "$draft" = true ]; then
+            echo "$tag: a draft left by an interrupted run, deleted"
+            gh release delete "$tag" -R "$GITHUB_REPOSITORY" --yes
+          elif [ -n "$draft" ]; then
             echo "::notice::$tag is released already: nothing to do (delete it to build again)"
             echo "exists=true" >> "$GITHUB_OUTPUT"
           fi
