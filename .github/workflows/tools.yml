@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+# One at a time: a run's draft release is never taken for an interrupted one's.
+concurrency:
+  group: tools
+  cancel-in-progress: false
+
 env:
   # https://github.com/mozilla/libdmg-hfsplus, its default branch's head on 2026-10-29.
   LIBDMG: e18579b391950589b9ed16ee630c54ce4319bb29
