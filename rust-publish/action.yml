@@ -121,8 +121,15 @@ runs:
           fi
 
           # A release's files the pack command named itself, as the rename would: published as they
-          # are, so a feed signed over their names holds.
+          # are, so a feed signed over their names holds. github-release's rename replaces
+          # `<name>-dev` anywhere in a name, over what is there: it must not touch these.
           if [ -n "$TAGGED" ] && [[ "$name" == "$TAGGED"* ]] && [ -f "$f" ] && [ ! -L "$f" ]; then
+            twin=$PREFIX${name#"$TAGGED"}
+            if [[ "$name" == *"$PREFIX"* ]] || [ -e "target/distrib/$twin" ]; then
+              echo "::error::'$name' must not contain '$PREFIX' or have a '$twin' beside it: the rename from '$PREFIX' would change or overwrite it"
+              exit 1
+            fi
+
             continue
           fi
 
