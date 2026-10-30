@@ -188,8 +188,6 @@ here as `tools-<yyyymmdd>` with the LICENSE and a `SHA256SUMS`. Their users (nim
 the hashes; a new build is a new release, and a day's release is never rebuilt:
 `gh workflow run tools.yml`.
 
-## Development
+## Contributing
 
-[agents.md](agents.md) has the rules; `make check` type-checks and runs the unit tests;
-[test.yml](.github/workflows/test.yml) runs every action in CI, releases against this repo with
-throwaway tags.
+Agree a change with the maintainer first; multi-step work gets a plan in `docs/plans/`. `make check` lints the workflows, type-checks and runs the unit tests, and [test.yml](.github/workflows/test.yml) runs every action in CI, releases against this repo with throwaway tags; both pass before a merge. A commit is one short lowercase line with no body, its docs updated in the same commit. [agents.md](agents.md) has the project's rules.
