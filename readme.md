@@ -190,4 +190,4 @@ the hashes; a new build is a new release, and a day's release is never rebuilt:
 
 ## Contributing
 
-`make check` lints the workflows, type-checks and runs the unit tests, and [test.yml](.github/workflows/test.yml) runs every action in CI, releases against this repo with throwaway tags; both pass before a merge. A commit is one short lowercase line with no body, its docs updated in the same commit. [agents.md](agents.md) has the project's rules.
+Pull requests are welcome, including ones made with agents: point yours at [agents.md](agents.md).
