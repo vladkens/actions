@@ -107,6 +107,13 @@ runs:
         # `<name>-<tag>` on a release with a pack command, else empty.
         TAGGED: ${{ inputs.pack != '' && steps.check.outputs.tag != '' && format('{0}-{1}', steps.mode.outputs.name, steps.check.outputs.tag) || '' }}
       run: |
+        # Fails the step; under test.yml's EXPECT_FAILURE a plain line, not an annotation.
+        refuse() {
+          if [ -n "${EXPECT_FAILURE:-}" ]; then echo "expected failure: $1"; else echo "::error::$1"; fi
+
+          exit 1
+        }
+
         for f in target/distrib/* target/distrib/.[!.]*; do
           [ -e "$f" ] || [ -L "$f" ] || continue
           name=${f#target/distrib/}
@@ -126,21 +133,18 @@ runs:
           if [ -n "$TAGGED" ] && [[ "$name" == "$TAGGED"* ]] && [ -f "$f" ] && [ ! -L "$f" ]; then
             twin=$PREFIX${name#"$TAGGED"}
             if [[ "$name" == *"$PREFIX"* ]]; then
-              echo "::error::found '$name', named for the tag but containing '$PREFIX': the release's rename would change its name; expected no '$PREFIX' in it"
-              exit 1
+              refuse "found '$name', named for the tag but containing '$PREFIX': the release's rename would change its name; expected no '$PREFIX' in it"
             fi
 
             if [ -f "target/distrib/$twin" ]; then
-              echo "::error::found '$twin' beside '$name': the release's rename would overwrite '$name' with it; expected only one of them"
-              exit 1
+              refuse "found '$twin' beside '$name': the release's rename would overwrite '$name' with it; expected only one of them"
             fi
 
             continue
           fi
 
           if [ -L "$f" ] || [ ! -f "$f" ] || [[ "$name" != "$PREFIX"* ]]; then
-            echo "::error::unexpected '$name' in the release files: expected regular files named '$PREFIX*'${TAGGED:+ or '$TAGGED*'}"
-            exit 1
+            refuse "unexpected '$name' in the release files: expected regular files named '$PREFIX*'${TAGGED:+ or '$TAGGED*'}"
           fi
         done
 

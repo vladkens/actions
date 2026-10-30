@@ -24,7 +24,7 @@ An action's inputs and outputs are in its `action.yml`, its usage in the top `re
 - Imports keep the `.ts` extension: `.js` passes tsc but fails in Node.
 - Every action is safe to re-run: it checks what already exists (tag, release, asset, published version) and does only what is missing.
 - Untrusted values (commit messages, inputs) reach commands only as arguments or env, never through string interpolation into a shell.
-- Fail with one `::error::` line that says what was expected and what was found.
+- Fail with one `::error::` line that says what was expected and what was found; with `EXPECT_FAILURE` set, which only test.yml's expected-failure steps do, it is a plain `expected failure:` line, so those cases don't annotate the run.
 - Agree a plan with the person first. Multi-step work keeps a checklist in `docs/plans/yyyymmdd-<name>.md`, and during the work only its checkboxes are ticked, with no progress prose; when the last item is done, add `Done: yyyy-mm-dd` below the title and a short `## Result`, and move the plan to `docs/plans/completed/`. Never delete plans.
 - `make prepare` formats (oxfmt) and autofixes (oxlint); `make check test` and test.yml pass before a merge.
 - A commit is one short lowercase line, prefixed with `<action>: ` or its area (`ci: `, `test: `, `readme: `) when it concerns one, with no body and with the docs updated in the same commit.

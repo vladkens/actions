@@ -94,6 +94,8 @@ jobs:
       - id: wrong-version
         name: release-check (wrong version)
         continue-on-error: true
+        env:
+          EXPECT_FAILURE: "1"
         uses: ./release-check
         with:
           manifest: tests/fixtures/cargo/Cargo.toml
@@ -102,6 +104,8 @@ jobs:
       - id: not-a-release
         name: release-check (not a release)
         continue-on-error: true
+        env:
+          EXPECT_FAILURE: "1"
         uses: ./release-check
         with:
           manifest: tests/fixtures/cargo/Cargo.toml
@@ -110,6 +114,8 @@ jobs:
       - id: no-entry
         name: release-check (no changelog entry)
         continue-on-error: true
+        env:
+          EXPECT_FAILURE: "1"
         uses: ./release-check
         with:
           manifest: tests/fixtures/npm/package.json
@@ -118,6 +124,8 @@ jobs:
       - id: no-changelog
         name: release-check (no changelog)
         continue-on-error: true
+        env:
+          EXPECT_FAILURE: "1"
         uses: ./release-check
         with:
           manifest: tests/fixtures/cargo/Cargo.toml
@@ -127,6 +135,8 @@ jobs:
       - id: not-a-releaser
         name: release-check (not a releaser)
         continue-on-error: true
+        env:
+          EXPECT_FAILURE: ${{ github.event_name != 'pull_request' && '1' || '' }}
         uses: ./release-check
         with:
           manifest: tests/fixtures/cargo/Cargo.toml
@@ -139,6 +149,8 @@ jobs:
       - id: unfinished-plans
         name: release-check (finished plan not moved)
         continue-on-error: true
+        env:
+          EXPECT_FAILURE: "1"
         uses: ./release-check
         with:
           manifest: tests/fixtures/cargo/Cargo.toml
@@ -149,6 +161,8 @@ jobs:
       - id: released
         name: release-check (released)
         continue-on-error: true
+        env:
+          EXPECT_FAILURE: "1"
         uses: ./release-check
         with:
           manifest: tests/fixtures/workspace/Cargo.toml
@@ -190,6 +204,8 @@ jobs:
       - id: crate-no-token
         name: crates-publish (no token)
         continue-on-error: true
+        env:
+          EXPECT_FAILURE: "1"
         uses: ./crates-publish
         with:
           manifest-path: tests/fixtures/crate/Cargo.toml
@@ -224,6 +240,8 @@ jobs:
       - id: apple
         name: rust-dist (Apple off macOS)
         continue-on-error: true
+        env:
+          EXPECT_FAILURE: "1"
         uses: ./rust-dist
         with:
           targets: aarch64-apple-darwin
@@ -338,6 +356,8 @@ jobs:
       - id: rust-build
         name: rust-build (refuses this job)
         continue-on-error: true
+        env:
+          EXPECT_FAILURE: "1"
         uses: ./rust-build
         with:
           dist: mkdir -p target/distrib && echo one > target/distrib/fixture-dev-a.txt
@@ -347,6 +367,8 @@ jobs:
       - id: py-build
         name: py-build (refuses this job)
         continue-on-error: true
+        env:
+          EXPECT_FAILURE: "1"
         uses: ./py-build
         with:
           working-directory: tests/fixtures/pypkg
@@ -424,6 +446,8 @@ jobs:
       - id: check-other-commit
         name: release-check (tag on another commit)
         continue-on-error: true
+        env:
+          EXPECT_FAILURE: "1"
         uses: ./release-check
         with:
           manifest: ${{ runner.temp }}/package.json
@@ -433,6 +457,8 @@ jobs:
       - id: other-commit
         name: github-release (tag on another commit)
         continue-on-error: true
+        env:
+          EXPECT_FAILURE: "1"
         uses: ./github-release
         with:
           tag: ${{ env.OTHER }}
@@ -527,6 +553,8 @@ jobs:
       # Files not named `<name>-dev*` are refused before anything is published.
       - id: wrong-name
         continue-on-error: true
+        env:
+          EXPECT_FAILURE: "1"
         uses: ./rust-publish
         with:
           name: other
@@ -568,6 +596,8 @@ jobs:
             echo "$LABEL|$TAG" > update.txt
       - id: pack-wrong
         continue-on-error: true
+        env:
+          EXPECT_FAILURE: "1"
         uses: ./rust-publish
         with:
           name: fixture

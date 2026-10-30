@@ -11,14 +11,21 @@ export const fail: (message: string) => never = message => {
   throw new Failure(message)
 }
 
-// Runs an action body; any error becomes one `::error::` line and a failed step.
+// Runs an action body; any error becomes one `::error::` line and a failed step. With
+// `EXPECT_FAILURE` set (test.yml's negative cases) it is a plain log line, so the run shows no
+// annotation for a failure the test wants; the step still fails.
 export const main = async (body: () => void | Promise<void>): Promise<void> => {
   try {
     await body()
   } catch (err) {
     const message =
       err instanceof Failure ? err.message : String(err instanceof Error ? err.stack : err)
-    console.log(`::error::${escape(message)}`)
+    if (process.env.EXPECT_FAILURE) {
+      logText(`expected failure: ${message}`)
+    } else {
+      console.log(`::error::${escape(message)}`)
+    }
+
     process.exitCode = 1
   }
 }
