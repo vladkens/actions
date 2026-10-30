@@ -10,7 +10,8 @@ permissions:
   contents: read
 
 jobs:
-  check:
+  # make check test, then each building block that needs no write token, case by case.
+  blocks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -18,23 +19,42 @@ jobs:
         with:
           node-version: 24
       - run: npm ci
-      # actionlint for make check, pinned.
-      - run: |
+      - name: Install actionlint, pinned
+        run: |
           mkdir -p "$HOME/.local/bin"
           bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12 "$HOME/.local/bin"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - run: make check
+      - run: make check test
 
-  # Both runner OSes, which also proves the runner runs `main: index.ts` there.
-  release-check:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v7
+      # A release only on a push of a release title to the branch.
+      - id: release
+        name: release-commit (release title)
+        uses: ./release-commit
+        with:
+          message: |
+            release: v1.0.1 (#12)
+
+            * squashed body
+          branch: ${{ github.ref_name }}
+      - id: other-title
+        name: release-commit (other title)
+        uses: ./release-commit
+        with:
+          message: 'release: version change'
+          branch: ${{ github.ref_name }}
+      - id: other-branch
+        name: release-commit (other branch)
+        uses: ./release-commit
+        with:
+          message: 'release: v1.0.1'
+          branch: not-${{ github.ref_name }}
+      - env:
+          RELEASES: ${{ steps.release.outputs.release }} ${{ steps.other-title.outputs.release }} ${{ steps.other-branch.outputs.release }}
+          PUSH: ${{ github.event_name == 'push' }}
+        run: test "$RELEASES" = "$PUSH false false"
 
       - id: cargo
+        name: release-check (Cargo.toml)
         uses: ./release-check
         with:
           manifest: tests/fixtures/cargo/Cargo.toml
@@ -55,11 +75,12 @@ jobs:
           test "$(cat "$NOTES_FILE")" = "$NOTES"
 
       - id: pyproject
+        name: release-check (pyproject.toml)
         uses: ./release-check
         with:
           manifest: tests/fixtures/pyproject/pyproject.toml
           changelog: tests/fixtures/changelog.md
-          plans: tests/fixtures/plans/missing # end to end: a missing plans directory is skipped
+          plans: ${{ runner.temp }}/no-plans # a missing plans directory is skipped
           message: 'release: v1.0.10'
       - env:
           TAG: ${{ steps.pyproject.outputs.tag }}
@@ -71,6 +92,7 @@ jobs:
 
       # Each of these must fail.
       - id: wrong-version
+        name: release-check (wrong version)
         continue-on-error: true
         uses: ./release-check
         with:
@@ -78,6 +100,7 @@ jobs:
           changelog: tests/fixtures/changelog.md
           message: 'release: v1.0.10'
       - id: not-a-release
+        name: release-check (not a release)
         continue-on-error: true
         uses: ./release-check
         with:
@@ -85,6 +108,7 @@ jobs:
           changelog: tests/fixtures/changelog.md
           message: 'fix: v1.0.1'
       - id: no-entry
+        name: release-check (no changelog entry)
         continue-on-error: true
         uses: ./release-check
         with:
@@ -92,6 +116,7 @@ jobs:
           changelog: tests/fixtures/changelog.md
           message: 'release: v0.9.0'
       - id: no-changelog
+        name: release-check (no changelog)
         continue-on-error: true
         uses: ./release-check
         with:
@@ -100,6 +125,7 @@ jobs:
           message: 'release: v1.0.1'
       # Except on a pull request, a release PR's check, which leaves the releasers to the merge.
       - id: not-a-releaser
+        name: release-check (not a releaser)
         continue-on-error: true
         uses: ./release-check
         with:
@@ -107,22 +133,27 @@ jobs:
           changelog: tests/fixtures/changelog.md
           message: 'release: v1.0.1'
           releasers: someone-else
+      - run: |
+          mkdir "$RUNNER_TEMP/plans"
+          printf '# Finished\n\n- [x] First\n' > "$RUNNER_TEMP/plans/20260101-finished.md"
       - id: unfinished-plans
+        name: release-check (finished plan not moved)
         continue-on-error: true
         uses: ./release-check
         with:
           manifest: tests/fixtures/cargo/Cargo.toml
           changelog: tests/fixtures/changelog.md
-          plans: tests/fixtures/plans/bad
+          plans: ${{ runner.temp }}/plans
           message: 'release: v1.0.1'
       # This repo's own v1.0.0 tag: on another commit after a merge, already released before it.
       - id: released
+        name: release-check (released)
         continue-on-error: true
         uses: ./release-check
         with:
           manifest: tests/fixtures/workspace/Cargo.toml
           changelog: tests/fixtures/changelog.md
-          plans: tests/fixtures/plans/good
+          plans: ''
           message: 'release: v1.0.0'
       - env:
           OUTCOMES: >-
@@ -134,70 +165,198 @@ jobs:
         run: test "$OUTCOMES" = "failure failure failure failure $RELEASER failure failure"
 
       # The run's own actor among the releasers.
-      - uses: ./release-check
+      - name: release-check (a releaser)
+        uses: ./release-check
         with:
           manifest: tests/fixtures/cargo/Cargo.toml
           changelog: tests/fixtures/changelog.md
           message: 'release: v1.0.1'
           releasers: someone-else, ${{ github.triggering_actor }}
 
-  # A release only on a push of a release title to the branch.
-  release-commit:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - id: release
-        uses: ./release-commit
-        with:
-          message: |
-            release: v1.0.1 (#12)
-
-            * squashed body
-          branch: ${{ github.ref_name }}
-      - id: other-title
-        uses: ./release-commit
-        with:
-          message: 'release: version change'
-          branch: ${{ github.ref_name }}
-      - id: other-branch
-        uses: ./release-commit
-        with:
-          message: 'release: v1.0.1'
-          branch: not-${{ github.ref_name }}
-      - env:
-          RELEASES: ${{ steps.release.outputs.release }} ${{ steps.other-title.outputs.release }} ${{ steps.other-branch.outputs.release }}
-          PUSH: ${{ github.event_name == 'push' }}
-        run: test "$RELEASES" = "$PUSH false false"
-
-  crates-publish:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - id: new
+      # Before dev-version, which changes this crate's version in place.
+      - id: crate-new
+        name: crates-publish (new, dry run)
         uses: ./crates-publish
         with:
           manifest-path: tests/fixtures/crate/Cargo.toml
           dry-run: true
-      - id: published
+      - id: crate-published
+        name: crates-publish (published, dry run)
         uses: ./crates-publish
         with:
           manifest-path: tests/fixtures/crate-published/Cargo.toml
           dry-run: true
-      - env:
-          SKIPPED: ${{ steps.new.outputs.skipped }} ${{ steps.published.outputs.skipped }}
-        run: test "$SKIPPED" = "false true"
       # Not on crates.io and not a dry run: must stop for the missing token before publishing.
-      - id: no-token
+      - id: crate-no-token
+        name: crates-publish (no token)
         continue-on-error: true
         uses: ./crates-publish
         with:
           manifest-path: tests/fixtures/crate/Cargo.toml
       - env:
-          OUTCOME: ${{ steps.no-token.outcome }}
-        run: test "$OUTCOME" = failure
+          SKIPPED: ${{ steps.crate-new.outputs.skipped }} ${{ steps.crate-published.outputs.skipped }}
+          OUTCOME: ${{ steps.crate-no-token.outcome }}
+        run: test "$SKIPPED $OUTCOME" = "false true failure"
+
+      # A non-release build's version from `git describe` against this repo's vX.Y.Z tags.
+      - id: stamp
+        name: dev-version
+        uses: ./dev-version
+        with:
+          manifest-path: tests/fixtures/crate/Cargo.toml
+      - env:
+          VERSION: ${{ steps.stamp.outputs.version }}
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-[0-9]+-g[0-9a-f]+$ ]]
+          grep -qx "version = \"$VERSION\"" tests/fixtures/crate/Cargo.toml
+          grep -qx "version = \"$VERSION\"" tests/fixtures/crate/Cargo.lock
+          cargo build --locked --manifest-path tests/fixtures/crate/Cargo.toml
+
+      # rust-dist on a real binary crate for the runner's own target; the macos job does the rest.
+      - id: dist
+        name: rust-dist (Linux)
+        uses: ./rust-dist
+        with:
+          targets: x86_64-unknown-linux-gnu
+          name: fixture
+          working-directory: tests/fixtures/bin
+      # Apple targets need a Mac.
+      - id: apple
+        name: rust-dist (Apple off macOS)
+        continue-on-error: true
+        uses: ./rust-dist
+        with:
+          targets: aarch64-apple-darwin
+          working-directory: tests/fixtures/bin
+      - working-directory: tests/fixtures/bin
+        env:
+          OUTCOME: ${{ steps.apple.outcome }}
+        run: |
+          test "$OUTCOME" = failure
+          mkdir unpacked
+          tar xzf target/distrib/fixture-dev-x86_64-unknown-linux-gnu.tar.gz -C unpacked
+          test "$(unpacked/fixture-bin)" = "fixture-bin 0.1.0"
+
+      # homebrew-bump against a local bare tap: a first run commits url/version/sha256, a second
+      # changes nothing, and no tag means no work.
+      - run: |
+          git init --quiet --bare -b main "$RUNNER_TEMP/tap.git"
+          git init --quiet -b main "$RUNNER_TEMP/seed"
+          printf 'class Fixture < Formula\n  url "https://x/fixture-v0.0.1.tar.gz"\n  version "0.0.1"\n  sha256 "aaaa"\nend\n' > "$RUNNER_TEMP/seed/fixture.rb"
+          git -C "$RUNNER_TEMP/seed" add fixture.rb
+          git -C "$RUNNER_TEMP/seed" -c user.name=t -c user.email=t@t commit --quiet -m init
+          git -C "$RUNNER_TEMP/seed" push --quiet "$RUNNER_TEMP/tap.git" main
+          echo archive > "$RUNNER_TEMP/fixture-v1.2.3.tar.gz"
+      - id: brew-none
+        name: homebrew-bump (no tag)
+        uses: ./homebrew-bump
+        with:
+          tap: file://${{ runner.temp }}/tap.git
+          token: unused
+      - id: brew-first
+        name: homebrew-bump (first)
+        uses: ./homebrew-bump
+        with:
+          tag: v1.2.3
+          file: ${{ runner.temp }}/fixture-v1.2.3.tar.gz
+          tap: file://${{ runner.temp }}/tap.git
+          formula: fixture.rb
+          token: unused
+      - id: brew-again
+        name: homebrew-bump (again)
+        uses: ./homebrew-bump
+        with:
+          tag: v1.2.3
+          file: ${{ runner.temp }}/fixture-v1.2.3.tar.gz
+          tap: file://${{ runner.temp }}/tap.git
+          formula: fixture.rb
+          token: unused
+      - env:
+          CHANGED: ${{ steps.brew-none.outputs.changed }} ${{ steps.brew-first.outputs.changed }} ${{ steps.brew-again.outputs.changed }}
+        run: |
+          test "$CHANGED" = "false true false"
+          formula=$(git --git-dir="$RUNNER_TEMP/tap.git" show main:fixture.rb)
+          grep -qx '  version "1.2.3"' <<< "$formula"
+          grep -qx "  url \"https://github.com/$GITHUB_REPOSITORY/releases/download/v1.2.3/fixture-v1.2.3.tar.gz\"" <<< "$formula"
+          grep -qx "  sha256 \"$(sha256sum "$RUNNER_TEMP/fixture-v1.2.3.tar.gz" | cut -d' ' -f1)\"" <<< "$formula"
+          test "$(git --git-dir="$RUNNER_TEMP/tap.git" log -1 --format='%an | %s')" = "github-actions[bot] | fixture v1.2.3"
+
+  # macOS, where real repos run rust-build: release-check once, which also proves the runner runs
+  # `main: index.ts` there, and rust-dist on a real binary crate, Apple natively and Linux through
+  # cargo-cross.
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - id: check
+        name: release-check
+        uses: ./release-check
+        with:
+          manifest: tests/fixtures/cargo/Cargo.toml
+          changelog: tests/fixtures/changelog.md
+          message: 'release: v1.0.1 (#12)'
+      - env:
+          TAG: ${{ steps.check.outputs.tag }}
+          NOTES_FILE: ${{ steps.check.outputs.notes-file }}
+        run: |
+          test "$TAG" = v1.0.1
+          test "$(cat "$NOTES_FILE")" = "$(printf '### Features\n\n- Added one (#12)')"
+
+      - id: dist
+        name: rust-dist
+        uses: ./rust-dist
+        with:
+          targets: aarch64-apple-darwin x86_64-unknown-linux-gnu
+          profile: dist # with debug info: the macOS archive gets fixture-bin.dSYM
+          name: fixture
+          working-directory: tests/fixtures/bin
+      - working-directory: tests/fixtures/bin
+        env:
+          FILES: ${{ steps.dist.outputs.files }}
+        run: |
+          test "$FILES" = "$(printf 'target/distrib/fixture-dev-aarch64-apple-darwin.tar.gz\ntarget/distrib/fixture-dev-x86_64-unknown-linux-gnu.tar.gz')"
+          test "$(tar tzf target/distrib/fixture-dev-x86_64-unknown-linux-gnu.tar.gz | sort | tr '\n' ' ')" = "fixture-bin readme.md "
+          mac=$(tar tzf target/distrib/fixture-dev-aarch64-apple-darwin.tar.gz)
+          grep -qx fixture-bin <<< "$mac"
+          grep -qx readme.md <<< "$mac"
+          grep -q '^fixture-bin.dSYM/Contents/Resources/DWARF/' <<< "$mac"
+          mkdir unpacked
+          tar xzf target/distrib/fixture-dev-x86_64-unknown-linux-gnu.tar.gz -C unpacked
+          file unpacked/fixture-bin | grep -q 'ELF 64-bit.*x86-64'
+          tar xzf target/distrib/fixture-dev-aarch64-apple-darwin.tar.gz -C unpacked
+          test "$(unpacked/fixture-bin)" = "fixture-bin 0.1.0"
+
+  # rust-build and py-build run the project's build code: both must refuse a job that could publish.
+  build-refused:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - id: rust-build
+        name: rust-build (refuses this job)
+        continue-on-error: true
+        uses: ./rust-build
+        with:
+          dist: mkdir -p target/distrib && echo one > target/distrib/fixture-dev-a.txt
+          cache: false
+          dev-version: false
+          artifact: release-test-write
+      - id: py-build
+        name: py-build (refuses this job)
+        continue-on-error: true
+        uses: ./py-build
+        with:
+          working-directory: tests/fixtures/pypkg
+          artifact: py-test-write
+      - env:
+          OUTCOMES: ${{ steps.rust-build.outcome }} ${{ steps.py-build.outcome }}
+        run: test "$OUTCOMES" = "failure failure"
 
   # Real releases of this repo under throwaway tags, deleted at the end.
-  github-release:
+  releases:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
@@ -206,6 +365,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       TAG: test-${{ github.run_id }}-${{ github.run_attempt }}
       OTHER: v0.0.0-test-${{ github.run_id }}-${{ github.run_attempt }} # release-check's tags start with v
+      DEV_TAG: test-dev-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v7
 
@@ -213,6 +373,7 @@ jobs:
           mkdir dist
           echo one > dist/fix-dev-a.txt
       - id: first
+        name: github-release (first)
         uses: ./github-release
         with:
           tag: ${{ env.TAG }}
@@ -232,7 +393,7 @@ jobs:
           rm dist/*
           echo rebuilt > dist/fix-dev-a.txt
           echo two > dist/fix-dev-b.txt
-      - id: second
+      - name: github-release (re-run)
         uses: ./github-release
         with:
           tag: ${{ env.TAG }}
@@ -245,7 +406,8 @@ jobs:
           test "$(gh release view "$TAG" --json body,assets --jq '.body + "|" + ([.assets[].name] | sort | join(","))')" = "first|fix-$TAG-a.txt,fix-$TAG-b.txt"
 
       # A release without assets (a library).
-      - uses: ./github-release
+      - name: github-release (no assets)
+        uses: ./github-release
         with:
           tag: ${{ env.TAG }}-bare
           notes: bare
@@ -260,14 +422,16 @@ jobs:
           echo '{ "version": "'"${OTHER#v}"'" }' > "$RUNNER_TEMP/package.json"
           printf '## %s\n\n- Changed\n' "$OTHER" > "$RUNNER_TEMP/changelog.md"
       - id: check-other-commit
+        name: release-check (tag on another commit)
         continue-on-error: true
         uses: ./release-check
         with:
           manifest: ${{ runner.temp }}/package.json
           changelog: ${{ runner.temp }}/changelog.md
-          plans: tests/fixtures/plans/good
+          plans: ''
           message: 'release: ${{ env.OTHER }}'
       - id: other-commit
+        name: github-release (tag on another commit)
         continue-on-error: true
         uses: ./github-release
         with:
@@ -279,60 +443,50 @@ jobs:
           test "$OUTCOMES" = "failure failure"
           ! gh release view "$OTHER"
 
+      - run: |
+          mkdir dev
+          echo one > dev/x-a.txt
+          echo one > dev/x-b.txt
+      - id: dev-first
+        name: dev-release (first)
+        uses: ./dev-release
+        with:
+          tag: ${{ env.DEV_TAG }}
+          files: dev/*
+      # Skipped only when main really moved on during the run; then there is nothing more to check.
+      - if: steps.dev-first.outputs.skipped != 'false'
+        run: test "$(git ls-remote origin "$GITHUB_REF" | cut -f1)" != "$GITHUB_SHA"
+      - if: steps.dev-first.outputs.skipped == 'false'
+        run: |
+          test "$(git ls-remote origin "refs/tags/$DEV_TAG" | cut -f1)" = "$GITHUB_SHA"
+          test "$(gh release view "$DEV_TAG" --json isPrerelease,assets --jq '"\(.isPrerelease)|" + ([.assets[].name] | sort | join(","))')" = "true|x-a.txt,x-b.txt"
+
+      # The next build drops `b`, adds `c` and changes `a`.
+      - if: steps.dev-first.outputs.skipped == 'false'
+        run: |
+          rm dev/x-b.txt
+          echo two > dev/x-a.txt
+          echo two > dev/x-c.txt
+      - id: dev-second
+        name: dev-release (next build)
+        if: steps.dev-first.outputs.skipped == 'false'
+        uses: ./dev-release
+        with:
+          tag: ${{ env.DEV_TAG }}
+          title: Test build
+          files: dev/*
+      - if: steps.dev-second.outputs.skipped == 'false'
+        run: |
+          test "$(gh release view "$DEV_TAG" --json name,assets --jq '.name + "|" + ([.assets[].name] | sort | join(","))')" = "Test build|x-a.txt,x-c.txt"
+          test "$(gh release download "$DEV_TAG" --pattern x-a.txt --output -)" = two
+
       - if: always()
         run: |
           gh release delete "$TAG" --cleanup-tag --yes || true
           gh release delete "$TAG-bare" --cleanup-tag --yes || true
+          gh release delete "$OTHER" --cleanup-tag --yes || true
           gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$OTHER" || true
-
-  dev-release:
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    env:
-      GH_TOKEN: ${{ github.token }}
-      TAG: test-dev-${{ github.run_id }}-${{ github.run_attempt }}
-    steps:
-      - uses: actions/checkout@v7
-
-      - run: |
-          mkdir dist
-          echo one > dist/x-a.txt
-          echo one > dist/x-b.txt
-      - id: first
-        uses: ./dev-release
-        with:
-          tag: ${{ env.TAG }}
-          files: dist/*
-      # Skipped only when main really moved on during the run; then there is nothing more to check.
-      - if: steps.first.outputs.skipped != 'false'
-        run: test "$(git ls-remote origin "$GITHUB_REF" | cut -f1)" != "$GITHUB_SHA"
-      - if: steps.first.outputs.skipped == 'false'
-        run: |
-          test "$(git ls-remote origin "refs/tags/$TAG" | cut -f1)" = "$GITHUB_SHA"
-          test "$(gh release view "$TAG" --json isPrerelease,assets --jq '"\(.isPrerelease)|" + ([.assets[].name] | sort | join(","))')" = "true|x-a.txt,x-b.txt"
-
-      # The next build drops `b`, adds `c` and changes `a`.
-      - if: steps.first.outputs.skipped == 'false'
-        run: |
-          rm dist/x-b.txt
-          echo two > dist/x-a.txt
-          echo two > dist/x-c.txt
-      - id: second
-        if: steps.first.outputs.skipped == 'false'
-        uses: ./dev-release
-        with:
-          tag: ${{ env.TAG }}
-          title: Test build
-          files: dist/*
-      - if: steps.second.outputs.skipped == 'false'
-        run: |
-          test "$(gh release view "$TAG" --json name,assets --jq '.name + "|" + ([.assets[].name] | sort | join(","))')" = "Test build|x-a.txt,x-c.txt"
-          test "$(gh release download "$TAG" --pattern x-a.txt --output -)" = two
-
-      - if: always()
-        run: gh release delete "$TAG" --cleanup-tag --yes || true
+          gh release delete "$DEV_TAG" --cleanup-tag --yes || true
 
   # rust-build → rust-publish with a fake build, as a repo's workflow uses them: the dev path,
   # published under a throwaway tag. The release path needs a release commit and is proven by the
@@ -346,7 +500,7 @@ jobs:
         with:
           dist: mkdir -p target/distrib && echo one > target/distrib/fixture-dev-a.txt
           cache: false
-          dev-version: false # no Cargo.toml at this repo's root; dev-version is tested below
+          dev-version: false # no Cargo.toml at this repo's root; the blocks job tests dev-version
           dev: true
           artifact: release-test
       # Without dev, a plain push builds nothing (a manual run always builds).
@@ -357,42 +511,6 @@ jobs:
           cache: false
           dev-version: false
           artifact: release-nodev
-
-  # A non-release build's version from `git describe` against this repo's vX.Y.Z tags.
-  dev-version:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - id: stamp
-        uses: ./dev-version
-        with:
-          manifest-path: tests/fixtures/crate/Cargo.toml
-      - env:
-          VERSION: ${{ steps.stamp.outputs.version }}
-        run: |
-          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-[0-9]+-g[0-9a-f]+$ ]]
-          grep -qx "version = \"$VERSION\"" tests/fixtures/crate/Cargo.toml
-          grep -qx "version = \"$VERSION\"" tests/fixtures/crate/Cargo.lock
-          cargo build --locked --manifest-path tests/fixtures/crate/Cargo.toml
-
-  # rust-build must refuse a job that could publish.
-  rust-build-write:
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@v7
-      - id: build
-        continue-on-error: true
-        uses: ./rust-build
-        with:
-          dist: mkdir -p target/distrib && echo one > target/distrib/fixture-dev-a.txt
-          artifact: release-test-write
-      - env:
-          OUTCOME: ${{ steps.build.outcome }}
-        run: test "$OUTCOME" = failure
 
   rust-publish:
     needs: rust-build
@@ -470,6 +588,7 @@ jobs:
             test "$NODEV" = success
             if gh release view "$TAG-nodev" > /dev/null 2>&1; then exit 1; fi
           fi
+
           test "$FILES" = target/distrib/fixture-dev-a.txt
           test -z "$RELEASED"
           test "$(gh release view "$TAG" --json isPrerelease,assets --jq '"\(.isPrerelease)|" + ([.assets[].name] | join(","))')" = "true|fixture-dev-a.txt"
@@ -496,24 +615,6 @@ jobs:
           artifact: py-test
       - run: test "$(ls tests/fixtures/pypkg/dist)" = "$(printf 'fixture_pkg-0.1.0-py2.py3-none-any.whl\nfixture_pkg-0.1.0.tar.gz')"
 
-  py-build-write:
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@v7
-      - id: build
-        continue-on-error: true
-        uses: ./py-build
-        with:
-          working-directory: tests/fixtures/pypkg
-          artifact: py-test-write
-      - env:
-          OUTCOME: ${{ steps.build.outcome }}
-        run: test "$OUTCOME" = failure
-
   py-publish:
     needs: py-build
     runs-on: ubuntu-latest
@@ -532,102 +633,3 @@ jobs:
         run: |
           test -z "$RELEASED"
           test ! -e tests/fixtures/pypkg/dist
-
-  # homebrew-bump against a local bare tap: a first run commits url/version/sha256, a second
-  # changes nothing, and no tag means no work.
-  homebrew-bump:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - run: |
-          git init --quiet --bare -b main "$RUNNER_TEMP/tap.git"
-          git init --quiet -b main "$RUNNER_TEMP/seed"
-          printf 'class Fixture < Formula\n  url "https://x/fixture-v0.0.1.tar.gz"\n  version "0.0.1"\n  sha256 "aaaa"\nend\n' > "$RUNNER_TEMP/seed/fixture.rb"
-          git -C "$RUNNER_TEMP/seed" add fixture.rb
-          git -C "$RUNNER_TEMP/seed" -c user.name=t -c user.email=t@t commit --quiet -m init
-          git -C "$RUNNER_TEMP/seed" push --quiet "$RUNNER_TEMP/tap.git" main
-          echo archive > "$RUNNER_TEMP/fixture-v1.2.3.tar.gz"
-      - id: none
-        uses: ./homebrew-bump
-        with:
-          tap: file://${{ runner.temp }}/tap.git
-          token: unused
-      - id: first
-        uses: ./homebrew-bump
-        with:
-          tag: v1.2.3
-          file: ${{ runner.temp }}/fixture-v1.2.3.tar.gz
-          tap: file://${{ runner.temp }}/tap.git
-          formula: fixture.rb
-          token: unused
-      - id: again
-        uses: ./homebrew-bump
-        with:
-          tag: v1.2.3
-          file: ${{ runner.temp }}/fixture-v1.2.3.tar.gz
-          tap: file://${{ runner.temp }}/tap.git
-          formula: fixture.rb
-          token: unused
-      - env:
-          CHANGED: ${{ steps.none.outputs.changed }} ${{ steps.first.outputs.changed }} ${{ steps.again.outputs.changed }}
-        run: |
-          test "$CHANGED" = "false true false"
-          formula=$(git --git-dir="$RUNNER_TEMP/tap.git" show main:fixture.rb)
-          grep -qx '  version "1.2.3"' <<< "$formula"
-          grep -qx "  url \"https://github.com/$GITHUB_REPOSITORY/releases/download/v1.2.3/fixture-v1.2.3.tar.gz\"" <<< "$formula"
-          grep -qx "  sha256 \"$(sha256sum "$RUNNER_TEMP/fixture-v1.2.3.tar.gz" | cut -d' ' -f1)\"" <<< "$formula"
-          test "$(git --git-dir="$RUNNER_TEMP/tap.git" log -1 --format='%an | %s')" = "github-actions[bot] | fixture v1.2.3"
-
-  # rust-dist on a real binary crate: Apple natively, Linux through cargo-cross.
-  rust-dist-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v7
-      - id: dist
-        uses: ./rust-dist
-        with:
-          targets: aarch64-apple-darwin x86_64-unknown-linux-gnu
-          profile: dist # with debug info: the macOS archive gets fixture-bin.dSYM
-          name: fixture
-          working-directory: tests/fixtures/bin
-      - working-directory: tests/fixtures/bin
-        env:
-          FILES: ${{ steps.dist.outputs.files }}
-        run: |
-          test "$FILES" = "$(printf 'target/distrib/fixture-dev-aarch64-apple-darwin.tar.gz\ntarget/distrib/fixture-dev-x86_64-unknown-linux-gnu.tar.gz')"
-          test "$(tar tzf target/distrib/fixture-dev-x86_64-unknown-linux-gnu.tar.gz | sort | tr '\n' ' ')" = "fixture-bin readme.md "
-          mac=$(tar tzf target/distrib/fixture-dev-aarch64-apple-darwin.tar.gz)
-          grep -qx fixture-bin <<< "$mac"
-          grep -qx readme.md <<< "$mac"
-          grep -q '^fixture-bin.dSYM/Contents/Resources/DWARF/' <<< "$mac"
-          mkdir unpacked
-          tar xzf target/distrib/fixture-dev-x86_64-unknown-linux-gnu.tar.gz -C unpacked
-          file unpacked/fixture-bin | grep -q 'ELF 64-bit.*x86-64'
-          tar xzf target/distrib/fixture-dev-aarch64-apple-darwin.tar.gz -C unpacked
-          test "$(unpacked/fixture-bin)" = "fixture-bin 0.1.0"
-
-  rust-dist-linux:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - id: dist
-        uses: ./rust-dist
-        with:
-          targets: x86_64-unknown-linux-gnu
-          name: fixture
-          working-directory: tests/fixtures/bin
-      # Apple targets need a Mac.
-      - id: apple
-        continue-on-error: true
-        uses: ./rust-dist
-        with:
-          targets: aarch64-apple-darwin
-          working-directory: tests/fixtures/bin
-      - working-directory: tests/fixtures/bin
-        env:
-          OUTCOME: ${{ steps.apple.outcome }}
-        run: |
-          test "$OUTCOME" = failure
-          mkdir unpacked
-          tar xzf target/distrib/fixture-dev-x86_64-unknown-linux-gnu.tar.gz -C unpacked
-          test "$(unpacked/fixture-bin)" = "fixture-bin 0.1.0"

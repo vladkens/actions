@@ -1,6 +1,6 @@
 import type { Release } from '../lib/github.ts'
 
-export type AssetStep = 'upload' | 'replace' | 'download'
+type AssetStep = 'upload' | 'replace' | 'download'
 
 // What a re-run does with each file. A published release keeps its assets: they are downloaded
 // over the local files, and only missing ones are uploaded. A draft is what's left of a failed

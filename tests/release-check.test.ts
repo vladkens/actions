@@ -1,21 +1,49 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { fileURLToPath } from 'node:url'
 import { RELEASE_NOT_FOUND, TAG_NOT_FOUND } from '../lib/github.ts'
 import { manifestVersion, tomlString } from '../lib/manifest.ts'
 import { changelogNotes, hasEntry, isReleaser } from '../release-check/notes.ts'
 import { completedProblems, isFinished, planProblems } from '../release-check/plans.ts'
 
-const fixture = (path: string) => readFileSync(new URL(`fixtures/${path}`, import.meta.url), 'utf8')
-const version = (path: string) => manifestVersion(path, fixture(path))
+const changelog = `## v1.0.10 – 2026-10-12
+
+### Fixes
+
+- Fixed ten
+
+**Full Changelog**: https://github.com/vladkens/fixture/compare/v1.0.1...v1.0.10
+
+---
+
+## v1.0.1 – 2026-10-01
+
+### Features
+
+- Added one (#12)
+
+---
+
+## v1.0.0 – 2026-09-01
+
+- Added zero
+
+---
+
+## v0.9.0 – 2026-08-01
+
+Initial release.
+`
 
 test('manifest versions', () => {
-  assert.equal(version('cargo/Cargo.toml'), '1.0.1')
-  assert.equal(version('workspace/Cargo.toml'), '1.0.0')
-  assert.equal(version('pyproject/pyproject.toml'), '1.0.10')
-  assert.equal(version('npm/package.json'), '0.9.0')
+  const cargo = '[package]\nname = "x"\nversion = "1.0.1"\n\n[dependencies]\nother = { version = "2.0.0" }\n\n[[bin]]\nname = "x"\nversion = "9.9.9"\n'
+  assert.equal(manifestVersion('Cargo.toml', cargo), '1.0.1')
+  const workspace = '[workspace]\nmembers = ["crates/*"]\n\n[workspace.package]\nversion = "1.0.0"\n\n[package]\nname = "x"\nversion.workspace = true\n'
+  assert.equal(manifestVersion('Cargo.toml', workspace), '1.0.0')
+  assert.equal(manifestVersion('py/pyproject.toml', '[project]\nname = "x"\nversion = "1.0.10"\ndependencies = ["httpx>=0.27"]\n'), '1.0.10')
+  assert.equal(manifestVersion('package.json', '{ "version": "0.9.0", "dependencies": { "other": "2.0.0" } }'), '0.9.0')
   assert.throws(() => manifestVersion('pyproject.toml', '[project]\ndynamic = ["version"]'), /no static version/)
   assert.throws(() => manifestVersion('setup.py', ''), /unknown manifest/)
 })
@@ -28,19 +56,17 @@ test('toml strings come only from their table', () => {
 })
 
 test('notes match the exact tag, without rules', () => {
-  const log = fixture('changelog.md')
-  assert.equal(changelogNotes(log, 'v1.0.1'), '### Features\n\n- Added one (#12)')
-  assert.match(changelogNotes(log, 'v1.0.10'), /^### Fixes\n\n- Fixed ten\n\n\*\*Full Changelog\*\*: \S+$/)
-  assert.equal(changelogNotes(log, 'v1.0.0'), '- Added zero')
-  assert.equal(changelogNotes(log, 'v1.0'), '')
-  assert.equal(changelogNotes(log, 'v1.0.2'), '')
-  assert.equal(changelogNotes(log.replace(/\n/g, '\r\n'), 'v1.0.0'), '- Added zero')
+  assert.equal(changelogNotes(changelog, 'v1.0.1'), '### Features\n\n- Added one (#12)')
+  assert.match(changelogNotes(changelog, 'v1.0.10'), /^### Fixes\n\n- Fixed ten\n\n\*\*Full Changelog\*\*: \S+$/)
+  assert.equal(changelogNotes(changelog, 'v1.0.0'), '- Added zero')
+  assert.equal(changelogNotes(changelog, 'v1.0'), '')
+  assert.equal(changelogNotes(changelog, 'v1.0.2'), '')
+  assert.equal(changelogNotes(changelog.replace(/\n/g, '\r\n'), 'v1.0.0'), '- Added zero')
 })
 
 test('notes need a bullet', () => {
-  const log = fixture('changelog.md')
-  assert.equal(hasEntry(changelogNotes(log, 'v1.0.1')), true)
-  assert.equal(hasEntry(changelogNotes(log, 'v0.9.0')), false)
+  assert.equal(hasEntry(changelogNotes(changelog, 'v1.0.1')), true)
+  assert.equal(hasEntry(changelogNotes(changelog, 'v0.9.0')), false)
   assert.equal(hasEntry('-'), false)
   assert.equal(hasEntry('-  '), false)
 })
@@ -88,15 +114,23 @@ test('a completed plan has Done at the top and a result', () => {
   assert.deepEqual(completedProblems(''), ["no 'Done: yyyy-mm-dd' below the title", "no '## Result'"])
 })
 
-test('plans directories', () => {
-  const dir = (name: string) => join(fileURLToPath(new URL('fixtures/plans', import.meta.url)), name)
-  assert.deepEqual(planProblems(dir('good')), [])
-  assert.deepEqual(planProblems(dir('missing')), [])
-  assert.deepEqual(planProblems(dir('bad')), [
-    `${dir('bad/20260101-finished.md')}: every box ticked, not moved to ${dir('bad/completed')}/`,
-    `${dir('bad/completed/20260101-late-done.md')}: no 'Done: yyyy-mm-dd' below the title`,
-    `${dir('bad/completed/20260102-no-result.md')}: no '## Result'`,
+// The plan files' own rules are above; this is which files are checked and how they are reported.
+test('plans directories', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'plans-'))
+  t.after(() => rmSync(dir, { recursive: true }))
+  const completed = join(dir, 'completed')
+  mkdirSync(completed)
+  writeFileSync(join(dir, '20260101-finished.md'), '# Finished\n\n- [x] First\n')
+  writeFileSync(join(dir, '20260102-open.md'), '# Open\n\n- [x] First\n- [ ] Second\n')
+  writeFileSync(join(dir, 'notes.txt'), '- [x] Not a plan\n')
+  writeFileSync(join(completed, '20260101-no-done.md'), '# Late\n\nText\n\nDone: 2026-01-02\n')
+  writeFileSync(join(completed, '20260102-ok.md'), '# Fine\n\nDone: 2026-01-03\n\n## Result\n')
+
+  assert.deepEqual(planProblems(dir), [
+    `${join(dir, '20260101-finished.md')}: every box ticked, not moved to ${completed}/`,
+    `${join(completed, '20260101-no-done.md')}: no 'Done: yyyy-mm-dd' below the title, no '## Result'`,
   ])
+  assert.deepEqual(planProblems(join(dir, 'missing')), [])
 })
 
 test('only gh not-found errors read as missing', () => {

@@ -12,7 +12,7 @@ export function gh(args: string[], stream = false): string {
 
 // For something that may not exist: null only when gh's error says so (`notFound`), so a bad token,
 // a rate limit or the network fails the step instead of reading as "not there".
-export function ghFind(args: string[], notFound: RegExp): string | null {
+function ghFind(args: string[], notFound: RegExp): string | null {
   try {
     return execFileSync('gh', args, {
       encoding: 'utf8',

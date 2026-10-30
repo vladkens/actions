@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { appendFileSync, globSync, statSync } from 'node:fs'
 
-export class Failure extends Error {}
+class Failure extends Error {}
 
 export function fail(message: string): never {
   throw new Failure(message)
