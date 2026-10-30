@@ -13,7 +13,7 @@ An action's inputs and outputs are in its `action.yml`, its usage in the top `re
 - No runtime dependencies and no build step: each JavaScript action is `runs.using: node24` with `main: index.ts`, run by the runner's Node through type stripping, and talks to GitHub only through `gh` and `git`, preinstalled on the hosted runners.
 - A JavaScript action can't call another action: an official one (`actions/attest`, `rust-lang/crates-io-auth-action`) runs as a step of a composite action, or of the calling workflow when it can't run in a composite (`pypa/gh-action-pypi-publish`); never reimplement it.
 - Composite actions call this repo's actions as `$/<action>`, so all run at one commit.
-- rust-build and py-build run the project's build code and stay read-only; rust-publish and py-publish write, never compile or run a build backend (rust-publish's `pack` only repackages rust-build's files), and trust nothing from the build's artifact but the files' bytes.
+- rust-build and py-build run the project's build code and get no secrets or write token; rust-publish and py-publish write, never compile or run a build backend (rust-publish's `pack` only repackages rust-build's files), and trust nothing from the build's artifact but the files' bytes.
 - Never publish test packages to crates.io, npm or PyPI; exercise releases only against this repo, crates.io only through `dry-run`, under throwaway tags the test deletes.
 - Adopting an action in another repo follows that repo's `agents.md`.
 
@@ -27,4 +27,4 @@ An action's inputs and outputs are in its `action.yml`, its usage in the top `re
 - Fail with one `::error::` line that says what was expected and what was found.
 - Agree a plan with the person first. Multi-step work keeps a checklist in `docs/plans/yyyymmdd-<name>.md`, and during the work only its checkboxes are ticked, with no progress prose; when the last item is done, add `Done: yyyy-mm-dd` below the title and a short `## Result`, and move the plan to `docs/plans/completed/`. Never delete plans.
 - `make check` and test.yml pass before a merge.
-- A commit is one short lowercase line, prefixed with `<action>: ` or its area (`ci: `, `test: `, `tools: `, `readme: `) when it concerns one, with no body and with the docs updated in the same commit.
+- A commit is one short lowercase line, prefixed with `<action>: ` or its area (`ci: `, `test: `, `readme: `) when it concerns one, with no body and with the docs updated in the same commit.
