@@ -9,6 +9,7 @@ re-run:
   already exists, only missing assets are uploaded; the notes and the assets already there stay.
   Those are downloaded over the local files, so `files` and the steps after it (attestation,
   checksums, a Homebrew formula) see the published bytes, not a rebuild's.
+- A draft left by a failed run (`gh release create` publishes a whole release or deletes its draft, so only when that deletion failed too) was never public: a re-run replaces all its assets with the local files, so they match each other (a pack's `update.txt` and the archives it signs), then publishes it.
 - `rename-from` / `rename-to` rename the assets first, e.g. a `dev` build's `wavo-dev-*` archives
   to `wavo-v1.2.3-*`.
 

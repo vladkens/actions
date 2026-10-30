@@ -59,6 +59,7 @@ jobs:
         with:
           manifest: tests/fixtures/pyproject/pyproject.toml
           changelog: tests/fixtures/changelog.md
+          plans: tests/fixtures/plans/missing # end to end: a missing plans directory is skipped
           message: 'release: v1.0.10'
       - env:
           TAG: ${{ steps.pyproject.outputs.tag }}
@@ -97,6 +98,7 @@ jobs:
           manifest: tests/fixtures/cargo/Cargo.toml
           changelog: tests/fixtures/missing.md
           message: 'release: v1.0.1'
+      # Except on a pull request, a release PR's check, which leaves the releasers to the merge.
       - id: not-a-releaser
         continue-on-error: true
         uses: ./release-check
@@ -105,12 +107,31 @@ jobs:
           changelog: tests/fixtures/changelog.md
           message: 'release: v1.0.1'
           releasers: someone-else
+      - id: unfinished-plans
+        continue-on-error: true
+        uses: ./release-check
+        with:
+          manifest: tests/fixtures/cargo/Cargo.toml
+          changelog: tests/fixtures/changelog.md
+          plans: tests/fixtures/plans/bad
+          message: 'release: v1.0.1'
+      # This repo's own v1.0.0 tag: on another commit after a merge, already released before it.
+      - id: released
+        continue-on-error: true
+        uses: ./release-check
+        with:
+          manifest: tests/fixtures/workspace/Cargo.toml
+          changelog: tests/fixtures/changelog.md
+          plans: tests/fixtures/plans/good
+          message: 'release: v1.0.0'
       - env:
           OUTCOMES: >-
             ${{ steps.wrong-version.outcome }} ${{ steps.not-a-release.outcome }}
             ${{ steps.no-entry.outcome }} ${{ steps.no-changelog.outcome }}
-            ${{ steps.not-a-releaser.outcome }}
-        run: test "$OUTCOMES" = "failure failure failure failure failure"
+            ${{ steps.not-a-releaser.outcome }} ${{ steps.unfinished-plans.outcome }}
+            ${{ steps.released.outcome }}
+          RELEASER: ${{ github.event_name == 'pull_request' && 'success' || 'failure' }}
+        run: test "$OUTCOMES" = "failure failure failure failure $RELEASER failure failure"
 
       # The run's own actor among the releasers.
       - uses: ./release-check
@@ -244,6 +265,7 @@ jobs:
         with:
           manifest: ${{ runner.temp }}/package.json
           changelog: ${{ runner.temp }}/changelog.md
+          plans: tests/fixtures/plans/good
           message: 'release: ${{ env.OTHER }}'
       - id: other-commit
         continue-on-error: true
