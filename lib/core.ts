@@ -6,12 +6,13 @@ import { appendFileSync, globSync, statSync } from "node:fs"
 
 class Failure extends Error {}
 
-export function fail(message: string): never {
+// An explicit type: TypeScript narrows after a call to a `never` function only then.
+export const fail: (message: string) => never = message => {
   throw new Failure(message)
 }
 
 // Runs an action body; any error becomes one `::error::` line and a failed step.
-export async function main(body: () => void | Promise<void>): Promise<void> {
+export const main = async (body: () => void | Promise<void>): Promise<void> => {
   try {
     await body()
   } catch (err) {
@@ -22,22 +23,22 @@ export async function main(body: () => void | Promise<void>): Promise<void> {
   }
 }
 
-export function input(name: string): string {
+export const input = (name: string): string => {
   return (process.env[`INPUT_${name.replace(/ /g, "_").toUpperCase()}`] ?? "").trim()
 }
 
-export function required(name: string): string {
+export const required = (name: string): string => {
   return input(name) || fail(`input '${name}' is required`)
 }
 
-export function bool(name: string): boolean {
+export const bool = (name: string): boolean => {
   const value = input(name)
   if (value === "true" || value === "false") return value === "true"
   return fail(`input '${name}' must be 'true' or 'false', got '${value}'`)
 }
 
 // One glob per line; each must match at least one file. Sorted, without duplicates.
-export function files(name: string): string[] {
+export const files = (name: string): string[] => {
   const found = new Set<string>()
   for (const pattern of input(name)
     .split("\n")
@@ -50,32 +51,32 @@ export function files(name: string): string[] {
   return [...found].sort()
 }
 
-export function env(name: string): string {
+export const env = (name: string): string => {
   return process.env[name] || fail(`${name} is not set: run this inside GitHub Actions`)
 }
 
-export function setOutput(name: string, value: string): void {
+export const setOutput = (name: string, value: string): void => {
   const delimiter = `EOF_${randomUUID()}`
   appendFileSync(env("GITHUB_OUTPUT"), `${name}<<${delimiter}\n${value}\n${delimiter}\n`)
 }
 
-export function mask(secret: string): void {
+export const mask = (secret: string): void => {
   console.log(`::add-mask::${escape(secret)}`)
 }
 
-export function notice(message: string): void {
+export const notice = (message: string): void => {
   console.log(`::notice::${escape(message)}`)
 }
 
 // Prints untrusted text with workflow commands off, so a `::` line in it is not run.
-export function logText(text: string): void {
+export const logText = (text: string): void => {
   const resume = randomUUID()
   console.log(`::stop-commands::${resume}`)
   console.log(text)
   console.log(`::${resume}::`)
 }
 
-function escape(data: string): string {
+const escape = (data: string): string => {
   return data.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A")
 }
 
@@ -83,7 +84,7 @@ type RunOptions = { env?: Record<string, string>; stream?: boolean }
 
 // Runs a command without a shell, so arguments are never interpreted. Returns trimmed stdout;
 // with `stream` the output goes to the log instead. Throws when the command fails.
-export function run(cmd: string, args: string[], opts: RunOptions = {}): string {
+export const run = (cmd: string, args: string[], opts: RunOptions = {}): string => {
   const line = [cmd, ...args].join(" ")
   console.log(`$ ${line}`)
   try {
@@ -103,7 +104,7 @@ export function run(cmd: string, args: string[], opts: RunOptions = {}): string 
 }
 
 // Like `run` but quiet, and null instead of an error: for checks like "does this exist".
-export function probe(cmd: string, args: string[], opts: RunOptions = {}): string | null {
+export const probe = (cmd: string, args: string[], opts: RunOptions = {}): string | null => {
   try {
     const out = execFileSync(cmd, args, {
       encoding: "utf8",

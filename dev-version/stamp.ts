@@ -1,24 +1,24 @@
 // The version a non-release build reports: `git describe` against the last `vX.Y.Z` tag, e.g.
 // `0.9.0-12-g3672a1b` (12 commits after v0.9.0); without such a tag, the manifest's own version
 // with the commit, e.g. `0.1.0-g3672a1b`.
-export function devVersion(described: string | null, version: string, sha: string): string {
+export const devVersion = (described: string | null, version: string, sha: string): string => {
   return described ? described.replace(/^v/, "") : `${version}-g${sha}`
 }
 
 // `edit` on `text` with LF line ends, its result with the ends `text` had: a Windows checkout's
 // are CRLF.
-function withLf(text: string, edit: (lf: string) => string | undefined): string | undefined {
+const withLf = (text: string, edit: (lf: string) => string | undefined): string | undefined => {
   const out = edit(text.replace(/\r\n/g, "\n"))
   return text.includes("\r\n") ? out?.replace(/\n/g, "\r\n") : out
 }
 
 // Cargo.toml with `[package] version = "..."` set; undefined when the package has no literal version
 // there (e.g. `version.workspace = true`).
-export function setManifestVersion(text: string, version: string): string | undefined {
+export const setManifestVersion = (text: string, version: string): string | undefined => {
   return withLf(text, text => manifestWith(text, version))
 }
 
-function manifestWith(text: string, version: string): string | undefined {
+const manifestWith = (text: string, version: string): string | undefined => {
   const lines = text.split("\n")
   let table = ""
   for (let i = 0; i < lines.length; i++) {
@@ -39,16 +39,21 @@ function manifestWith(text: string, version: string): string | undefined {
 
 // Cargo.lock with the local package `name` (no `source`, as registry and git packages have) moved
 // from `from` to `version`; undefined when there is no such entry.
-export function setLockVersion(
+export const setLockVersion = (
   text: string,
   name: string,
   from: string,
   version: string,
-): string | undefined {
+): string | undefined => {
   return withLf(text, text => lockWith(text, name, from, version))
 }
 
-function lockWith(text: string, name: string, from: string, version: string): string | undefined {
+const lockWith = (
+  text: string,
+  name: string,
+  from: string,
+  version: string,
+): string | undefined => {
   const blocks = text.split(/\n(?=\[\[package\]\]\n)/)
   for (let i = 0; i < blocks.length; i++) {
     const lines = blocks[i].split("\n")

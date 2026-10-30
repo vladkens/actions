@@ -5,7 +5,7 @@ import { fail } from "./core.ts"
 
 export const MANIFESTS = ["Cargo.toml", "pyproject.toml", "package.json"]
 
-export function manifestVersion(path: string, text: string): string {
+export const manifestVersion = (path: string, text: string): string => {
   const name = basename(path)
   let version: string | undefined
   if (name === "Cargo.toml") {
@@ -27,7 +27,7 @@ export function manifestVersion(path: string, text: string): string {
 
 // A `key = "value"` string in a top-level `[table]`. Enough for manifests' version fields, not a
 // TOML parser: inline tables and multi-line strings are not read.
-export function tomlString(text: string, table: string, key: string): string | undefined {
+export const tomlString = (text: string, table: string, key: string): string | undefined => {
   let current = ""
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim()

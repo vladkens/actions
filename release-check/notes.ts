@@ -1,6 +1,6 @@
 // The body of the `## <tag> ...` section, up to the next `## ` heading, without `---` rules. The
 // tag is compared as a word, not a pattern: `v1.0.1` doesn't match `## v1.0.10`.
-export function changelogNotes(text: string, tag: string): string {
+export const changelogNotes = (text: string, tag: string): string => {
   const out: string[] = []
   let found = false
   for (const line of text.split(/\r?\n/)) {
@@ -13,12 +13,12 @@ export function changelogNotes(text: string, tag: string): string {
   return out.join("\n").trim()
 }
 
-export function hasEntry(notes: string): boolean {
+export const hasEntry = (notes: string): boolean => {
   return /^- \S/m.test(notes)
 }
 
 // Logins separated by spaces, commas or lines; GitHub compares them case-insensitively.
-export function isReleaser(actor: string, releasers: string): boolean {
+export const isReleaser = (actor: string, releasers: string): boolean => {
   const list = releasers
     .split(/[\s,]+/)
     .filter(Boolean)

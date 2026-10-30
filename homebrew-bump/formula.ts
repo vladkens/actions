@@ -2,7 +2,7 @@ import { fail } from "../lib/core.ts"
 
 // The formula with its `url`, `sha256` and (when present) `version` set. One download only: a
 // formula with several `url` lines (per-arch `on_arm` / `on_intel` blocks) is refused.
-export function bumpFormula(text: string, version: string, url: string, sha256: string): string {
+export const bumpFormula = (text: string, version: string, url: string, sha256: string): string => {
   const set = (key: string, value: string, required: boolean) => {
     const re = new RegExp(`^(\\s*${key}\\s+)"[^"]*"`, "gm")
     const found = text.match(re)?.length ?? 0

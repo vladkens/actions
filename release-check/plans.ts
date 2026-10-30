@@ -4,7 +4,7 @@ import { join } from "node:path"
 
 // The lines outside fenced code blocks, where a plan may quote examples. A fence closes only on
 // its own character, repeated at least as often, with nothing after it.
-function prose(text: string): string[] {
+const prose = (text: string): string[] => {
   const out: string[] = []
   let fence = ""
   for (const line of text.split(/\r?\n/)) {
@@ -32,7 +32,7 @@ function prose(text: string): string[] {
 }
 
 // At least one ticked box and none left open, in `- [x]` items (also `*`, `+` and `1.` ones).
-export function isFinished(text: string): boolean {
+export const isFinished = (text: string): boolean => {
   let done = 0
   let open = 0
   for (const line of prose(text)) {
@@ -46,7 +46,7 @@ export function isFinished(text: string): boolean {
 
 // What a completed plan lacks: `Done: yyyy-mm-dd` (and anything after it, like `, PR #3`) as the
 // first line below the `# ` title, or as the very first line, and a `## Result` section.
-export function completedProblems(text: string): string[] {
+export const completedProblems = (text: string): string[] => {
   const lines = prose(text)
   const filled = lines.map(x => x.trim()).filter(Boolean)
   const top = filled[0]?.startsWith("# ") ? filled[1] : filled[0]
@@ -59,7 +59,7 @@ export function completedProblems(text: string): string[] {
 }
 
 // Each plan file in `dir` that breaks the rules, as `<path>: <problems>`; none for a missing dir.
-export function planProblems(dir: string): string[] {
+export const planProblems = (dir: string): string[] => {
   const out: string[] = []
   const completed = join(dir, "completed")
   for (const path of markdown(dir)) {
@@ -75,7 +75,7 @@ export function planProblems(dir: string): string[] {
   return out
 }
 
-function markdown(dir: string): string[] {
+const markdown = (dir: string): string[] => {
   if (!existsSync(dir)) return []
   return readdirSync(dir, { withFileTypes: true })
     .filter(x => x.isFile() && x.name.endsWith(".md"))
