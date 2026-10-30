@@ -12,7 +12,7 @@ Shared release steps for vladkens' repos, as GitHub Actions used like `vladkens/
 | [py-publish](py-publish/) | On a release commit checks py-build's files and creates the tag and GitHub release for the PyPI upload after it | Gets the write token; never builds or runs project code |
 | [homebrew-bump](homebrew-bump/) | Points a tap's formula at the release's archive; does nothing without a release | Gets a token that pushes to the tap; runs no project code |
 
-Inputs and outputs are in each action's `action.yml`. The JavaScript actions run on the runner's Node 24 and need `gh` and `git`, preinstalled on GitHub-hosted runners.
+Each one's readme has its usage, inputs and outputs. The JavaScript actions run on the runner's Node 24 and need `gh` and `git`, preinstalled on GitHub-hosted runners.
 
 ## Building blocks
 
@@ -74,32 +74,8 @@ jobs:
       - uses: vladkens/actions/rust-publish@v1
 ```
 
-- A release publishes the crate and the files renamed from `<name>-dev` to `<name>-vX.Y.Z`; a crate without binaries drops `targets` and sets `files: false` on rust-publish.
-- `crates: false` on both actions skips crates.io, for a crate with `publish = false` or one not meant for it.
-- `targets` builds Apple targets on the Mac and Linux and Windows ones through [cargo-cross](https://github.com/zijiren233/cargo-cross) (glibc 2.28); `dist: <command>` replaces it when a repo ships something else.
-- Outside release commits and release PRs rust-build sets the package version to what `git describe` gives (`0.9.0-12-g3672a1b`), so dev builds say what they are; `dev-version: false` turns it off.
-- With `dev: true` on rust-build, every push to `main` also builds the files and rust-publish updates the rolling `dev` pre-release; keep the workflow's `concurrency` from cancelling running `main` runs.
-- Attestations verify with `gh attestation verify FILE -R <owner>/<repo>`; a private repo gets none.
-- `pack: <command>` on rust-publish makes the final release files from rust-build's, with `LABEL` (`dev` or the tag), `TAG` (empty for dev) and the step's `env`, its secrets included. It must not compile, and of the files it leaves at the top of `target/distrib` only `<name>-dev*`, `update.txt` and, on a release, `<name>-<tag>*` are published (subfolders are skipped; any other file fails the step).
-
-  ```yaml
-      - uses: vladkens/actions/rust-publish@v1
-        with:
-          pack: make pack
-        env:
-          SIGN_KEY: ${{ secrets.SIGN_KEY }}
-  ```
-
-- A Homebrew formula with one download follows a release with one more step in `publish`, after `- id: release` `uses: vladkens/actions/rust-publish@v1`; it gets one archive, since `files` lists them all:
-
-  ```yaml
-      - uses: vladkens/actions/homebrew-bump@v1
-        with:
-          tag: ${{ steps.release.outputs.tag }} # empty unless released: then it does nothing
-          file: target/distrib/<name>-${{ steps.release.outputs.tag }}-aarch64-apple-darwin.tar.gz
-          tap: vladkens/homebrew-tap
-          token: ${{ secrets.HOMEBREW_REPO_TOKEN }} # can push to the tap
-  ```
+- A release publishes the crate and the files renamed from `<name>-dev` to `<name>-vX.Y.Z`; the targets, the dev pre-release, crates.io and `pack` (the final release files, made in `publish`) are inputs of [rust-build](rust-build/) and [rust-publish](rust-publish/).
+- A Homebrew formula follows a release with [homebrew-bump](homebrew-bump/) as one more step in `publish`.
 
 ## A Python repo
 
@@ -138,7 +114,7 @@ jobs:
           skip-existing: true
 ```
 
-There is no dev pre-release for Python; a failed PyPI upload is fixed by re-running the job. py-publish accepts only `<name>-<version>.tar.gz` and `<name>-<version>-*.whl`, so the version in `pyproject.toml` must be canonical PEP 440.
+There is no dev pre-release for Python; a failed PyPI upload is fixed by re-running the job.
 
 ## Rules
 

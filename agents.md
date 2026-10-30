@@ -20,7 +20,7 @@ An action's inputs and outputs are in its `action.yml`, its usage in the top `re
 ## Conventions
 
 - One directory per action: `action.yml` and a JavaScript action's `index.ts` with its helpers beside it; shared code goes in `lib/`, unit tests in `tests/<action>.test.ts` with fixtures in `tests/fixtures/`.
-- An action gets its own `readme.md` (inputs, outputs, required permissions, an example) only when it has more to say than the top readme's table; the top readme documents the rest.
+- Every action repos call directly (the top readme's Actions table) has a `readme.md`: a usage snippet, inputs and outputs; a building block has one when it has more to say than its table row.
 - Imports keep the `.ts` extension: `.js` passes tsc but fails in Node.
 - Every action is safe to re-run: it checks what already exists (tag, release, asset, published version) and does only what is missing.
 - Untrusted values (commit messages, inputs) reach commands only as arguments or env, never through string interpolation into a shell.
