@@ -17,7 +17,8 @@ await main(() => {
   if (!existsSync(file)) fail(`no ${file}`)
   const tap = required('tap')
   const formula = input('formula') || `${env('GITHUB_REPOSITORY').split('/')[1]}.rb`
-  const url = input('url') || `https://github.com/${env('GITHUB_REPOSITORY')}/releases/download/${tag}/${basename(file)}`
+  const url =
+    input('url') || `https://github.com/${env('GITHUB_REPOSITORY')}/releases/download/${tag}/${basename(file)}`
   const sha256 = createHash('sha256').update(readFileSync(file)).digest('hex')
 
   // The token reaches git only through env (an http.extraheader for github.com), never the

@@ -16,7 +16,9 @@ await main(() => {
   const actor = input('actor')
   const releasers = input('releasers')
   if (!pr && !isReleaser(actor, releasers)) {
-    fail(`release run started by '${actor}', but only '${releasers}' may release: nothing published; one of them can re-run it`)
+    fail(
+      `release run started by '${actor}', but only '${releasers}' may release: nothing published; one of them can re-run it`,
+    )
   }
 
   const manifest = input('manifest') || MANIFESTS.find((x) => existsSync(x))
@@ -37,7 +39,9 @@ await main(() => {
   const plans = input('plans')
   const problems = plans ? planProblems(plans) : []
   if (problems.length) {
-    fail(`expected each finished plan in ${join(plans, 'completed')}/ with 'Done: yyyy-mm-dd' below its title and a '## Result', got ${problems.join('; ')}`)
+    fail(
+      `expected each finished plan in ${join(plans, 'completed')}/ with 'Done: yyyy-mm-dd' below its title and a '## Result', got ${problems.join('; ')}`,
+    )
   }
 
   // Before anything is published: a tag left on another commit would fail the release after it.

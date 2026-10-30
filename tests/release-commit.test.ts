@@ -14,7 +14,14 @@ test('release titles', () => {
     assert.ok(isReleaseTitle(title), title)
   }
 
-  for (const title of ['release: version change', 'release: v', 'release: v1.0.1 and more', 'release:v1.0.1', 'fix: v1.0.1', '']) {
+  for (const title of [
+    'release: version change',
+    'release: v',
+    'release: v1.0.1 and more',
+    'release:v1.0.1',
+    'fix: v1.0.1',
+    '',
+  ]) {
     assert.ok(!isReleaseTitle(title), title)
   }
 })

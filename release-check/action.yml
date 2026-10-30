@@ -11,7 +11,7 @@ inputs:
     description: "The commit message whose first line must be `release: vX.Y.Z`, optionally with ` (#N)`. The default is the pushed head commit's message, or on a `pull_request` event (only) the PR's title."
     default: ${{ github.event_name == 'pull_request' && github.event.pull_request.title || github.event.head_commit.message }}
   plans:
-    description: "The plans directory: a top-level `*.md` with every box ticked fails, and so does one in `completed/` without `Done: yyyy-mm-dd` below its title or `## Result`. Empty skips it, as does a missing directory."
+    description: 'The plans directory: a top-level `*.md` with every box ticked fails, and so does one in `completed/` without `Done: yyyy-mm-dd` below its title or `## Result`. Empty skips it, as does a missing directory.'
     default: docs/plans
   releasers:
     description: GitHub logins allowed to release, separated by spaces or commas; anyone when empty. Not checked on a pull request.

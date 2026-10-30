@@ -48,5 +48,8 @@ test('a CRLF checkout (Windows) is stamped and keeps its line ends', () => {
   const toml = crlf('[package]\nname = "x"\nversion = "0.9.0"\n')
   assert.equal(setManifestVersion(toml, '0.9.0-1-gabc'), crlf('[package]\nname = "x"\nversion = "0.9.0-1-gabc"\n'))
   const lock = crlf('version = 4\n\n[[package]]\nname = "x"\nversion = "0.9.0"\n')
-  assert.equal(setLockVersion(lock, 'x', '0.9.0', '0.9.0-1-gabc'), crlf('version = 4\n\n[[package]]\nname = "x"\nversion = "0.9.0-1-gabc"\n'))
+  assert.equal(
+    setLockVersion(lock, 'x', '0.9.0', '0.9.0-1-gabc'),
+    crlf('version = 4\n\n[[package]]\nname = "x"\nversion = "0.9.0-1-gabc"\n'),
+  )
 })

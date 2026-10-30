@@ -38,11 +38,16 @@ Initial release.
 `
 
 test('manifest versions', () => {
-  const cargo = '[package]\nname = "x"\nversion = "1.0.1"\n\n[dependencies]\nother = { version = "2.0.0" }\n\n[[bin]]\nname = "x"\nversion = "9.9.9"\n'
+  const cargo =
+    '[package]\nname = "x"\nversion = "1.0.1"\n\n[dependencies]\nother = { version = "2.0.0" }\n\n[[bin]]\nname = "x"\nversion = "9.9.9"\n'
   assert.equal(manifestVersion('Cargo.toml', cargo), '1.0.1')
-  const workspace = '[workspace]\nmembers = ["crates/*"]\n\n[workspace.package]\nversion = "1.0.0"\n\n[package]\nname = "x"\nversion.workspace = true\n'
+  const workspace =
+    '[workspace]\nmembers = ["crates/*"]\n\n[workspace.package]\nversion = "1.0.0"\n\n[package]\nname = "x"\nversion.workspace = true\n'
   assert.equal(manifestVersion('Cargo.toml', workspace), '1.0.0')
-  assert.equal(manifestVersion('py/pyproject.toml', '[project]\nname = "x"\nversion = "1.0.10"\ndependencies = ["httpx>=0.27"]\n'), '1.0.10')
+  assert.equal(
+    manifestVersion('py/pyproject.toml', '[project]\nname = "x"\nversion = "1.0.10"\ndependencies = ["httpx>=0.27"]\n'),
+    '1.0.10',
+  )
   assert.equal(manifestVersion('package.json', '{ "version": "0.9.0", "dependencies": { "other": "2.0.0" } }'), '0.9.0')
   assert.throws(() => manifestVersion('pyproject.toml', '[project]\ndynamic = ["version"]'), /no static version/)
   assert.throws(() => manifestVersion('setup.py', ''), /unknown manifest/)
@@ -104,11 +109,15 @@ test('a completed plan has Done at the top and a result', () => {
   assert.deepEqual(completedProblems('# T\n\nDone: 2026-10-13, PR #1\n\nText\n\n## Result\n\nOk'), [])
   assert.deepEqual(completedProblems('Done: 2026-10-22\n\n# T\n\n## Result'), [])
   assert.deepEqual(completedProblems('# T\r\n\r\nDone: 2026-10-13\r\n\r\n## Result\r\n'), [])
-  assert.deepEqual(completedProblems('# T\n\nText\n\nDone: 2026-10-13\n\n## Result'), ["no 'Done: yyyy-mm-dd' below the title"])
+  assert.deepEqual(completedProblems('# T\n\nText\n\nDone: 2026-10-13\n\n## Result'), [
+    "no 'Done: yyyy-mm-dd' below the title",
+  ])
   assert.deepEqual(completedProblems('# T\n\nDone: 13.10.2026\n\n## Result'), ["no 'Done: yyyy-mm-dd' below the title"])
   assert.deepEqual(completedProblems('# T\n\nDone: 2026-13-01\n\n## Result'), ["no 'Done: yyyy-mm-dd' below the title"])
   assert.deepEqual(completedProblems('# T\n\nDone: 2026-10-32\n\n## Result'), ["no 'Done: yyyy-mm-dd' below the title"])
-  assert.deepEqual(completedProblems('# T\n\nDone: 2026-10-311\n\n## Result'), ["no 'Done: yyyy-mm-dd' below the title"])
+  assert.deepEqual(completedProblems('# T\n\nDone: 2026-10-311\n\n## Result'), [
+    "no 'Done: yyyy-mm-dd' below the title",
+  ])
   assert.deepEqual(completedProblems('# T\n\nDone: 2026-10-13\n\n## Results'), ["no '## Result'"])
   assert.deepEqual(completedProblems('# T\n\nDone: 2026-10-13\n\n```\n## Result\n```'), ["no '## Result'"])
   assert.deepEqual(completedProblems(''), ["no 'Done: yyyy-mm-dd' below the title", "no '## Result'"])
@@ -137,5 +146,8 @@ test('only gh not-found errors read as missing', () => {
   assert.match('gh: Not Found (HTTP 404)', TAG_NOT_FOUND)
   assert.doesNotMatch('gh: Bad credentials (HTTP 401)\n{"message": "Bad credentials", "status": "401"}', TAG_NOT_FOUND)
   assert.match('release not found', RELEASE_NOT_FOUND)
-  assert.doesNotMatch('HTTP 401: Bad credentials (https://api.github.com/repos/o/r/releases/tags/v1)\nTry authenticating with:  gh auth login -h github.com', RELEASE_NOT_FOUND)
+  assert.doesNotMatch(
+    'HTTP 401: Bad credentials (https://api.github.com/repos/o/r/releases/tags/v1)\nTry authenticating with:  gh auth login -h github.com',
+    RELEASE_NOT_FOUND,
+  )
 })

@@ -46,7 +46,8 @@ export function completedProblems(text: string): string[] {
   const top = filled[0]?.startsWith('# ') ? filled[1] : filled[0]
 
   const problems: string[] = []
-  if (!/^Done: \d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])\b/.test(top ?? '')) problems.push("no 'Done: yyyy-mm-dd' below the title")
+  if (!/^Done: \d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])\b/.test(top ?? ''))
+    problems.push("no 'Done: yyyy-mm-dd' below the title")
   if (!lines.some((x) => /^## Result\s*$/.test(x))) problems.push("no '## Result'")
   return problems
 }

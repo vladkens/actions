@@ -39,7 +39,10 @@ await main(() => {
   } else {
     // A re-run keeps what is published, so later steps (attestation, checksums) see the published
     // bytes; a draft takes every file anew (assets.ts).
-    const steps = assetSteps(release, paths.map((x) => basename(x)))
+    const steps = assetSteps(
+      release,
+      paths.map((x) => basename(x)),
+    )
     paths.forEach((path, i) => {
       if (steps[i] === 'download') {
         gh(['release', 'download', tag, '--pattern', basename(path), '--dir', dirname(path), '--clobber'])

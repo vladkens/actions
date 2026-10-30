@@ -21,7 +21,7 @@ inputs:
     required: true
 outputs:
   changed:
-    description: "`true` when the formula was updated and pushed."
+    description: '`true` when the formula was updated and pushed.'
 runs:
   using: node24
   main: index.ts

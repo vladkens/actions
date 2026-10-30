@@ -38,7 +38,10 @@ export function bool(name: string): boolean {
 // One glob per line; each must match at least one file. Sorted, without duplicates.
 export function files(name: string): string[] {
   const found = new Set<string>()
-  for (const pattern of input(name).split('\n').map((x) => x.trim()).filter(Boolean)) {
+  for (const pattern of input(name)
+    .split('\n')
+    .map((x) => x.trim())
+    .filter(Boolean)) {
     const matched = globSync(pattern).filter((x) => statSync(x).isFile())
     if (!matched.length) fail(`input '${name}': '${pattern}' matches no files`)
     for (const file of matched) found.add(file)

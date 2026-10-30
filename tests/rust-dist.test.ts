@@ -19,8 +19,25 @@ test('archive names', () => {
 })
 
 test('shipped files: the readme and license files only', () => {
-  const files = ['readme.md', 'README.md', 'LICENSE', 'LICENSE-MIT', 'license.txt', 'COPYING', 'Cargo.toml', 'readme-old.md', 'licenses']
-  assert.deepEqual(files.filter(isShipped), ['readme.md', 'README.md', 'LICENSE', 'LICENSE-MIT', 'license.txt', 'COPYING'])
+  const files = [
+    'readme.md',
+    'README.md',
+    'LICENSE',
+    'LICENSE-MIT',
+    'license.txt',
+    'COPYING',
+    'Cargo.toml',
+    'readme-old.md',
+    'licenses',
+  ]
+  assert.deepEqual(files.filter(isShipped), [
+    'readme.md',
+    'README.md',
+    'LICENSE',
+    'LICENSE-MIT',
+    'license.txt',
+    'COPYING',
+  ])
 })
 
 test('profile directories', () => {

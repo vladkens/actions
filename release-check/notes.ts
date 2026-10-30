@@ -19,6 +19,9 @@ export function hasEntry(notes: string): boolean {
 
 // Logins separated by spaces, commas or lines; GitHub compares them case-insensitively.
 export function isReleaser(actor: string, releasers: string): boolean {
-  const list = releasers.split(/[\s,]+/).filter(Boolean).map((x) => x.toLowerCase())
+  const list = releasers
+    .split(/[\s,]+/)
+    .filter(Boolean)
+    .map((x) => x.toLowerCase())
   return list.length === 0 || list.includes(actor.toLowerCase())
 }

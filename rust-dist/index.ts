@@ -43,7 +43,10 @@ await main(() => {
     run(
       'cargo',
       ['cross', 'build', '--profile', profile, '--locked', '--glibc-version', '2.28', '--targets', other.join(',')],
-      { env: { CROSS_COMPILER_DIR: process.env.CROSS_COMPILER_DIR || join(homedir(), '.cache/cargo-cross') }, stream: true },
+      {
+        env: { CROSS_COMPILER_DIR: process.env.CROSS_COMPILER_DIR || join(homedir(), '.cache/cargo-cross') },
+        stream: true,
+      },
     )
   }
 
@@ -70,5 +73,7 @@ await main(() => {
   }
 
   setOutput('files', archives.join('\n'))
-  console.log(`${archives.length} archive(s), ${profile} profile, with ${[...bins, ...shipped].join(', ')}:\n${archives.join('\n')}`)
+  console.log(
+    `${archives.length} archive(s), ${profile} profile, with ${[...bins, ...shipped].join(', ')}:\n${archives.join('\n')}`,
+  )
 })

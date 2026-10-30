@@ -18,7 +18,7 @@ inputs:
     default: 'false'
 outputs:
   skipped:
-    description: "`true` when this version was already on crates.io."
+    description: '`true` when this version was already on crates.io.'
 runs:
   using: node24
   main: index.ts
