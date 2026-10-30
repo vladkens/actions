@@ -8,13 +8,13 @@ specifics (Docker, Homebrew).
 
 | Action | Does |
 | --- | --- |
-| rust-build | Read-only: checks a release commit, builds the release files, uploads them |
+| rust-build | Read-only: checks a release commit or PR, builds the release files, uploads them |
 | rust-dist | Builds a crate's binaries for a list of targets and packs them with the readme and license |
 | rust-publish | Writes, never compiles: the dev pre-release, or crates.io + tag + GitHub release |
-| py-build | Read-only: checks a release commit, builds the sdist and wheel with uv, uploads them |
+| py-build | Read-only: checks a release PR, builds the sdist and wheel with uv, uploads them |
 | py-publish | Writes, never builds: on a release commit checks the files, tag + GitHub release |
 | [release-commit](release-commit/readme.md) | Is this run a release: a push of a `release: vX.Y.Z` commit to the default branch |
-| [release-check](release-check/readme.md) | `release: vX.Y.Z` commit title = manifest version; notes from `changelog.md` |
+| [release-check](release-check/readme.md) | `release: vX.Y.Z` commit or PR title = manifest version; notes from `changelog.md`; finished plans in `docs/plans/completed/` |
 | [github-release](github-release/readme.md) | Tag, GitHub release, assets; a re-run uploads only what is missing |
 | [dev-release](dev-release/readme.md) | Rolling `dev` pre-release with the latest build's assets |
 | [crates-publish](crates-publish/readme.md) | `cargo publish`; skips a version already on crates.io |
@@ -33,15 +33,11 @@ commit.
 
 ## Releasing
 
-1. A `release: vX.Y.Z` PR bumps the version in the manifest and adds the `## vX.Y.Z – date`
-   section to `changelog.md`; it is squash-merged, so the commit on `main` is
-   `release: vX.Y.Z (#N)`.
-2. CI on that push checks it, publishes the package and creates the tag and the GitHub release.
-   No one pushes tags by hand.
-3. A failed run is fixed by re-running it: every step skips what is already done.
-4. Only the repo owner releases (rust-publish's and py-publish's `releasers`, logins separated by
-   spaces or commas): a release commit merged by anyone else fails before anything is published,
-   and the owner re-runs that run to release it. Collaborators merge other PRs as usual.
+1. A `release: vX.Y.Z` PR bumps the version in the manifest and adds the `## vX.Y.Z – date` section to `changelog.md`; it is squash-merged, so the commit on `main` is `release: vX.Y.Z (#N)`.
+2. Before the merge, the repo's `build` job checks the release PR with [release-check](release-check/readme.md): the title against the manifest, the changelog section, the plans in `docs/plans/` (none finished outside `completed/`, each completed one with its `Done:` date and `## Result`), and that the tag doesn't exist yet. So that job must also run on release PRs: `if: "github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' || startsWith(github.event.pull_request.title, 'release: v')"`. A PR renamed to `release: vX.Y.Z` after it was opened runs it again only with `edited` in `on.pull_request.types` (e.g. `types: [opened, synchronize, reopened, edited]`).
+3. CI on the merged commit's push checks it again, publishes the package and creates the tag and the GitHub release. No one pushes tags by hand.
+4. A failed run is fixed by re-running it: every step skips what is already done.
+5. Only the repo owner releases (rust-publish's and py-publish's `releasers`, logins separated by spaces or commas): a release commit merged by anyone else fails before anything is published, and the owner re-runs that run to release it. Collaborators merge other PRs as usual.
 
 ## A Rust repo
 
@@ -51,9 +47,9 @@ jobs:
     # ...
 
   # Read-only: dependencies' build scripts run here, so no `permissions:` beyond the top-level
-  # `contents: read`. Beside `test`, on the default branch only.
+  # `contents: read`. Beside `test`, on the default branch and on release PRs, which it checks.
   build:
-    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    if: "github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' || startsWith(github.event.pull_request.title, 'release: v')"
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
@@ -63,6 +59,7 @@ jobs:
 
   # Writes, never compiles.
   publish:
+    if: github.ref == 'refs/heads/main'
     needs: [test, build]
     runs-on: ubuntu-latest
     permissions:
@@ -79,11 +76,12 @@ jobs:
   rust-build, every push to the default branch also builds them and rust-publish puts them up
   as the rolling `dev` pre-release (for testing fixes, or a baseline to compare against); off
   by default, so other pushes build nothing.
-- Outside release commits rust-build first sets the package version in Cargo.toml and Cargo.lock
+- Outside release commits and release PRs rust-build first sets the package version in Cargo.toml and Cargo.lock
   to `git describe` against the last `vX.Y.Z` tag (`0.9.0-12-g3672a1b`: 12 commits after
   v0.9.0), so dev builds say what they are; a release builds its plain version.
   `dev-version: false` turns it off.
 - rust-publish decides what to publish from the event and the commit, never from the artifact, and refuses files not named `<name>-dev*` (or, from a `pack` command, `update.txt` and on a release `<name>-<tag>*`). It does nothing on pull requests or other branches.
+- On a release PR rust-build runs release-check in PR mode and `cargo publish --dry-run` (unless `crates: false`), then builds the release files with the plain version as the release will (even without `dev: true`), so a broken dist build shows before the merge. `publish` is skipped there by its `if:`.
 - rust-build fails in a job with `id-token: write`; it can't see `contents: write`, so keep every
   write permission to the publish job.
 - `targets` builds the binaries (Apple ones on the Mac, Linux and Windows through
@@ -160,6 +158,7 @@ jobs:
           skip-existing: true
 ```
 
+- On a release PR (titled `release: v…`) py-build first runs release-check in PR mode, and builds the files as on any other run (the build job runs on every PR here, so no `if:` is needed; renamed PRs still need `edited`).
 - Every run builds the files (cheap, and it checks the packaging). On a release commit py-publish
   downloads them into `dist/`, creates the tag and the GitHub release with the changelog's notes,
   and [pypa/gh-action-pypi-publish](https://github.com/pypa/gh-action-pypi-publish) uploads them

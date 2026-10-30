@@ -1,5 +1,5 @@
 name: release-check
-description: "Check a `release: vX.Y.Z` commit against the manifest's version and take its notes from the changelog."
+description: "Check a `release: vX.Y.Z` commit or PR against the manifest's version and take its notes from the changelog."
 inputs:
   manifest:
     description: Cargo.toml, pyproject.toml or package.json; the first one found when empty.
@@ -8,10 +8,13 @@ inputs:
     description: The changelog with a `## vX.Y.Z` section per release.
     default: changelog.md
   message:
-    description: "The commit message whose first line must be `release: vX.Y.Z`, optionally with ` (#N)`."
-    default: ${{ github.event.head_commit.message }}
+    description: "The commit message whose first line must be `release: vX.Y.Z`, optionally with ` (#N)`. The default is the pushed head commit's message, or on a `pull_request` event (only) the PR's title."
+    default: ${{ github.event_name == 'pull_request' && github.event.pull_request.title || github.event.head_commit.message }}
+  plans:
+    description: "The plans directory: a top-level `*.md` with every box ticked fails, and so does one in `completed/` without `Done: yyyy-mm-dd` below its title or `## Result`. Empty skips it, as does a missing directory."
+    default: docs/plans
   releasers:
-    description: GitHub logins allowed to release, separated by spaces or commas; anyone when empty.
+    description: GitHub logins allowed to release, separated by spaces or commas; anyone when empty. Not checked on a pull request.
     default: ''
   actor:
     description: Who releases; the person who merged the release commit, or who re-ran the run.
