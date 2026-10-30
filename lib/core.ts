@@ -1,8 +1,8 @@
 // The few pieces of @actions/core the actions need, so they run without dependencies:
 // https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands
-import { execFileSync } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
-import { appendFileSync, globSync, statSync } from 'node:fs'
+import { execFileSync } from "node:child_process"
+import { randomUUID } from "node:crypto"
+import { appendFileSync, globSync, statSync } from "node:fs"
 
 class Failure extends Error {}
 
@@ -15,14 +15,15 @@ export async function main(body: () => void | Promise<void>): Promise<void> {
   try {
     await body()
   } catch (err) {
-    const message = err instanceof Failure ? err.message : String(err instanceof Error ? err.stack : err)
+    const message =
+      err instanceof Failure ? err.message : String(err instanceof Error ? err.stack : err)
     console.log(`::error::${escape(message)}`)
     process.exitCode = 1
   }
 }
 
 export function input(name: string): string {
-  return (process.env[`INPUT_${name.replace(/ /g, '_').toUpperCase()}`] ?? '').trim()
+  return (process.env[`INPUT_${name.replace(/ /g, "_").toUpperCase()}`] ?? "").trim()
 }
 
 export function required(name: string): string {
@@ -31,7 +32,7 @@ export function required(name: string): string {
 
 export function bool(name: string): boolean {
   const value = input(name)
-  if (value === 'true' || value === 'false') return value === 'true'
+  if (value === "true" || value === "false") return value === "true"
   return fail(`input '${name}' must be 'true' or 'false', got '${value}'`)
 }
 
@@ -39,10 +40,10 @@ export function bool(name: string): boolean {
 export function files(name: string): string[] {
   const found = new Set<string>()
   for (const pattern of input(name)
-    .split('\n')
-    .map((x) => x.trim())
+    .split("\n")
+    .map(x => x.trim())
     .filter(Boolean)) {
-    const matched = globSync(pattern).filter((x) => statSync(x).isFile())
+    const matched = globSync(pattern).filter(x => statSync(x).isFile())
     if (!matched.length) fail(`input '${name}': '${pattern}' matches no files`)
     for (const file of matched) found.add(file)
   }
@@ -55,7 +56,7 @@ export function env(name: string): string {
 
 export function setOutput(name: string, value: string): void {
   const delimiter = `EOF_${randomUUID()}`
-  appendFileSync(env('GITHUB_OUTPUT'), `${name}<<${delimiter}\n${value}\n${delimiter}\n`)
+  appendFileSync(env("GITHUB_OUTPUT"), `${name}<<${delimiter}\n${value}\n${delimiter}\n`)
 }
 
 export function mask(secret: string): void {
@@ -75,7 +76,7 @@ export function logText(text: string): void {
 }
 
 function escape(data: string): string {
-  return data.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')
+  return data.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A")
 }
 
 type RunOptions = { env?: Record<string, string>; stream?: boolean }
@@ -83,19 +84,21 @@ type RunOptions = { env?: Record<string, string>; stream?: boolean }
 // Runs a command without a shell, so arguments are never interpreted. Returns trimmed stdout;
 // with `stream` the output goes to the log instead. Throws when the command fails.
 export function run(cmd: string, args: string[], opts: RunOptions = {}): string {
-  const line = [cmd, ...args].join(' ')
+  const line = [cmd, ...args].join(" ")
   console.log(`$ ${line}`)
   try {
     const out = execFileSync(cmd, args, {
-      encoding: 'utf8',
+      encoding: "utf8",
       env: { ...process.env, ...opts.env },
-      stdio: ['ignore', opts.stream ? 'inherit' : 'pipe', 'inherit'],
+      stdio: ["ignore", opts.stream ? "inherit" : "pipe", "inherit"],
       maxBuffer: 64 * 1024 * 1024,
     })
-    return (out ?? '').trim()
+    return (out ?? "").trim()
   } catch (err) {
     const status = (err as { status?: number | null }).status
-    return fail(`'${line}' failed${status == null ? '' : ` with exit code ${status}`}; its output is above`)
+    return fail(
+      `'${line}' failed${status == null ? "" : ` with exit code ${status}`}; its output is above`,
+    )
   }
 }
 
@@ -103,9 +106,9 @@ export function run(cmd: string, args: string[], opts: RunOptions = {}): string 
 export function probe(cmd: string, args: string[], opts: RunOptions = {}): string | null {
   try {
     const out = execFileSync(cmd, args, {
-      encoding: 'utf8',
+      encoding: "utf8",
       env: { ...process.env, ...opts.env },
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ["ignore", "pipe", "pipe"],
       maxBuffer: 64 * 1024 * 1024,
     })
     return out.trim()

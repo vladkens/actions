@@ -4,15 +4,15 @@ export function parseTargets(text: string): string[] {
 }
 
 export function isApple(target: string): boolean {
-  return target.endsWith('-apple-darwin')
+  return target.endsWith("-apple-darwin")
 }
 
 export function isWindows(target: string): boolean {
-  return target.includes('-windows-')
+  return target.includes("-windows-")
 }
 
 export function archiveName(name: string, target: string): string {
-  return `${name}-dev-${target}.${isWindows(target) ? 'zip' : 'tar.gz'}`
+  return `${name}-dev-${target}.${isWindows(target) ? "zip" : "tar.gz"}`
 }
 
 // The files shipped next to the binaries: the readme and every license file.
@@ -22,5 +22,5 @@ export function isShipped(file: string): boolean {
 
 // The directory cargo builds a profile into: `dev` builds into `debug`.
 export function profileDir(profile: string): string {
-  return profile === 'dev' ? 'debug' : profile
+  return profile === "dev" ? "debug" : profile
 }

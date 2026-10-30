@@ -3,31 +3,31 @@ description: The read-only half of a Rust release. Checks a release commit or PR
 inputs:
   targets:
     description: Rust targets to build the binaries for, packed with the readme and license as `<name>-dev-<target>`; empty for a crate without binaries. Apple ones need a macOS runner.
-    default: ''
+    default: ""
   name:
     description: The archives' prefix; the repo's name when empty.
-    default: ''
+    default: ""
   profile:
     description: The cargo profile `targets` builds; with debug info Apple targets also ship `<bin>.dSYM`.
     default: release
   dist:
     description: Instead of `targets`, a command that builds the release files into target/distrib, named `<name>-dev*`.
-    default: ''
+    default: ""
   dev:
     description: Also build the files on other pushes, for rust-publish's rolling dev pre-release. Off by default; release commits, release PRs and manual runs always build.
-    default: 'false'
+    default: "false"
   crates:
     description: On a release commit or PR, run `cargo publish --dry-run`.
-    default: 'true'
+    default: "true"
   dev-version:
     description: Outside release commits and release PRs, build with the version `git describe` gives (e.g. 0.9.0-12-g3672a1b).
-    default: 'true'
+    default: "true"
   cache:
     description: Cache cargo's registry and target/ (Swatinem/rust-cache).
-    default: 'true'
+    default: "true"
   cache-directories:
     description: More directories for that cache, one per line (e.g. cross toolchains).
-    default: ''
+    default: ""
   artifact:
     description: The artifact name rust-publish downloads.
     default: release

@@ -1,9 +1,14 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
-  // The repo's existing style: no semicolons, single quotes, lines up to 120.
+  // The user's own style (dotfiles .prettierrc): 100 columns, no semicolons, double quotes,
+  // `x => …` without parentheses, trailing commas everywhere.
+  "printWidth": 100,
   "semi": false,
-  "singleQuote": true,
-  "printWidth": 120,
+  "singleQuote": false,
+  "arrowParens": "avoid",
+  "trailingComma": "all",
+  // Sorted imports, as prettier-plugin-organize-imports does in the user's other repos.
+  "sortImports": true,
   // Readme tables stay compact and usage snippets keep their job-level indent; fixtures are test data.
   "ignorePatterns": ["*.md", "tests/fixtures/"],
 }

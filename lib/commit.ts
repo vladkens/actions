@@ -3,7 +3,7 @@ export function commitTitle(message: string): string {
   return message
     .split(/\r?\n/)[0]
     .trim()
-    .replace(/ \(#\d+\)$/, '')
+    .replace(/ \(#\d+\)$/, "")
 }
 
 // `release: v` and a version, nothing after it: `release: version change` is no release.

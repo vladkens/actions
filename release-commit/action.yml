@@ -1,5 +1,5 @@
 name: release-commit
-description: 'Tell whether this run releases: a push of a `release: vX.Y.Z` commit to the default branch.'
+description: "Tell whether this run releases: a push of a `release: vX.Y.Z` commit to the default branch."
 inputs:
   message:
     description: "The commit message; its first line, without a squash merge's ` (#N)`, must be `release: v` and a version."

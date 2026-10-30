@@ -4,13 +4,13 @@ export function changelogNotes(text: string, tag: string): string {
   const out: string[] = []
   let found = false
   for (const line of text.split(/\r?\n/)) {
-    if (line.startsWith('## ')) {
+    if (line.startsWith("## ")) {
       found = line.slice(3).trim().split(/\s+/)[0] === tag
       continue
     }
-    if (found && line.trim() !== '---') out.push(line)
+    if (found && line.trim() !== "---") out.push(line)
   }
-  return out.join('\n').trim()
+  return out.join("\n").trim()
 }
 
 export function hasEntry(notes: string): boolean {
@@ -22,6 +22,6 @@ export function isReleaser(actor: string, releasers: string): boolean {
   const list = releasers
     .split(/[\s,]+/)
     .filter(Boolean)
-    .map((x) => x.toLowerCase())
+    .map(x => x.toLowerCase())
   return list.length === 0 || list.includes(actor.toLowerCase())
 }

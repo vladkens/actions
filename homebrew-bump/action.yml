@@ -3,25 +3,25 @@ description: Point a Homebrew formula in a tap at a release's archive (url, sha2
 inputs:
   tag:
     description: The released tag, e.g. rust-publish's `tag` output; empty means no release, nothing to do.
-    default: ''
+    default: ""
   file:
     description: The released archive the formula downloads, e.g. rust-publish's `files` output when it is one file.
-    default: ''
+    default: ""
   tap:
     description: The tap, `owner/repo` on GitHub (e.g. vladkens/homebrew-tap).
     required: true
   formula:
     description: The formula's path in the tap; `<repo name>.rb` when empty.
-    default: ''
+    default: ""
   url:
     description: The download URL; the release asset of `file` when empty.
-    default: ''
+    default: ""
   token:
     description: A token that can push to the tap (a secret; GITHUB_TOKEN can't reach another repo).
     required: true
 outputs:
   changed:
-    description: '`true` when the formula was updated and pushed.'
+    description: "`true` when the formula was updated and pushed."
 runs:
   using: node24
   main: index.ts

@@ -9,16 +9,16 @@ inputs:
     default: Dev build
   notes:
     description: The release notes; the branch, commit and build time when empty.
-    default: ''
+    default: ""
   files:
     description: The assets, one glob per line; assets from earlier builds not among them are deleted.
     required: true
   token:
-    description: 'A token with `contents: write`.'
+    description: "A token with `contents: write`."
     default: ${{ github.token }}
 outputs:
   skipped:
-    description: '`true` when the branch has moved past this commit and nothing was released.'
+    description: "`true` when the branch has moved past this commit and nothing was released."
   files:
     description: The assets' local paths, one per line.
 runs:

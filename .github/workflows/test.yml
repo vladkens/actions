@@ -40,13 +40,13 @@ jobs:
         name: release-commit (other title)
         uses: ./release-commit
         with:
-          message: 'release: version change'
+          message: "release: version change"
           branch: ${{ github.ref_name }}
       - id: other-branch
         name: release-commit (other branch)
         uses: ./release-commit
         with:
-          message: 'release: v1.0.1'
+          message: "release: v1.0.1"
           branch: not-${{ github.ref_name }}
       - env:
           RELEASES: ${{ steps.release.outputs.release }} ${{ steps.other-title.outputs.release }} ${{ steps.other-branch.outputs.release }}
@@ -81,7 +81,7 @@ jobs:
           manifest: tests/fixtures/pyproject/pyproject.toml
           changelog: tests/fixtures/changelog.md
           plans: ${{ runner.temp }}/no-plans # a missing plans directory is skipped
-          message: 'release: v1.0.10'
+          message: "release: v1.0.10"
       - env:
           TAG: ${{ steps.pyproject.outputs.tag }}
           NOTES: ${{ steps.pyproject.outputs.notes }}
@@ -98,7 +98,7 @@ jobs:
         with:
           manifest: tests/fixtures/cargo/Cargo.toml
           changelog: tests/fixtures/changelog.md
-          message: 'release: v1.0.10'
+          message: "release: v1.0.10"
       - id: not-a-release
         name: release-check (not a release)
         continue-on-error: true
@@ -106,7 +106,7 @@ jobs:
         with:
           manifest: tests/fixtures/cargo/Cargo.toml
           changelog: tests/fixtures/changelog.md
-          message: 'fix: v1.0.1'
+          message: "fix: v1.0.1"
       - id: no-entry
         name: release-check (no changelog entry)
         continue-on-error: true
@@ -114,7 +114,7 @@ jobs:
         with:
           manifest: tests/fixtures/npm/package.json
           changelog: tests/fixtures/changelog.md
-          message: 'release: v0.9.0'
+          message: "release: v0.9.0"
       - id: no-changelog
         name: release-check (no changelog)
         continue-on-error: true
@@ -122,7 +122,7 @@ jobs:
         with:
           manifest: tests/fixtures/cargo/Cargo.toml
           changelog: tests/fixtures/missing.md
-          message: 'release: v1.0.1'
+          message: "release: v1.0.1"
       # Except on a pull request, a release PR's check, which leaves the releasers to the merge.
       - id: not-a-releaser
         name: release-check (not a releaser)
@@ -131,7 +131,7 @@ jobs:
         with:
           manifest: tests/fixtures/cargo/Cargo.toml
           changelog: tests/fixtures/changelog.md
-          message: 'release: v1.0.1'
+          message: "release: v1.0.1"
           releasers: someone-else
       - run: |
           mkdir "$RUNNER_TEMP/plans"
@@ -144,7 +144,7 @@ jobs:
           manifest: tests/fixtures/cargo/Cargo.toml
           changelog: tests/fixtures/changelog.md
           plans: ${{ runner.temp }}/plans
-          message: 'release: v1.0.1'
+          message: "release: v1.0.1"
       # This repo's own v1.0.0 tag: on another commit after a merge, already released before it.
       - id: released
         name: release-check (released)
@@ -153,8 +153,8 @@ jobs:
         with:
           manifest: tests/fixtures/workspace/Cargo.toml
           changelog: tests/fixtures/changelog.md
-          plans: ''
-          message: 'release: v1.0.0'
+          plans: ""
+          message: "release: v1.0.0"
       - env:
           OUTCOMES: >-
             ${{ steps.wrong-version.outcome }} ${{ steps.not-a-release.outcome }}
@@ -170,7 +170,7 @@ jobs:
         with:
           manifest: tests/fixtures/cargo/Cargo.toml
           changelog: tests/fixtures/changelog.md
-          message: 'release: v1.0.1'
+          message: "release: v1.0.1"
           releasers: someone-else, ${{ github.triggering_actor }}
 
       # Before dev-version, which changes this crate's version in place.
@@ -294,7 +294,7 @@ jobs:
         with:
           manifest: tests/fixtures/cargo/Cargo.toml
           changelog: tests/fixtures/changelog.md
-          message: 'release: v1.0.1 (#12)'
+          message: "release: v1.0.1 (#12)"
       - env:
           TAG: ${{ steps.check.outputs.tag }}
           NOTES_FILE: ${{ steps.check.outputs.notes-file }}
@@ -428,8 +428,8 @@ jobs:
         with:
           manifest: ${{ runner.temp }}/package.json
           changelog: ${{ runner.temp }}/changelog.md
-          plans: ''
-          message: 'release: ${{ env.OTHER }}'
+          plans: ""
+          message: "release: ${{ env.OTHER }}"
       - id: other-commit
         name: github-release (tag on another commit)
         continue-on-error: true
