@@ -1,7 +1,6 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
-  // The user's own style (dotfiles .prettierrc): 100 columns, no semicolons, double quotes,
-  // `x => …` without parentheses, trailing commas everywhere.
+  // 100 columns, no semicolons, double quotes, `x => …` without parentheses, trailing commas.
   "printWidth": 100,
   "semi": false,
   "singleQuote": false,
