@@ -1,0 +1,9 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  // The repo's existing style: no semicolons, single quotes, lines up to 120.
+  "semi": false,
+  "singleQuote": true,
+  "printWidth": 120,
+  // Readme tables stay compact and usage snippets keep their job-level indent; fixtures are test data.
+  "ignorePatterns": ["*.md", "tests/fixtures/"],
+}
