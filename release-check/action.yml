@@ -3,7 +3,7 @@ description: "Check a `release: vX.Y.Z` commit or PR against the manifest's vers
 inputs:
   manifest:
     description: Cargo.toml, pyproject.toml or package.json; the first one found when empty.
-    default: ''
+    default: ""
   changelog:
     description: The changelog with a `## vX.Y.Z` section per release.
     default: changelog.md
@@ -15,7 +15,7 @@ inputs:
     default: docs/plans
   releasers:
     description: GitHub logins allowed to release, separated by spaces or commas; anyone when empty. Not checked on a pull request.
-    default: ''
+    default: ""
   actor:
     description: Who releases; the person who merged the release commit, or who re-ran the run.
     default: ${{ github.triggering_actor }}

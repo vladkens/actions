@@ -9,7 +9,7 @@ inputs:
     default: Dev build
   notes:
     description: The release notes; the branch, commit and build time when empty.
-    default: ''
+    default: ""
   files:
     description: The assets, one glob per line; assets from earlier builds not among them are deleted.
     required: true

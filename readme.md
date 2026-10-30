@@ -1,53 +1,56 @@
 # actions
 
-Shared release steps for vladkens' repos, as GitHub Actions. A Rust repo uses two of them:
-[rust-build](#a-rust-repo) and [rust-publish](#a-rust-repo) hide the whole release process, and a
-Python repo [py-build and py-publish](#a-python-repo); the others are their building blocks,
-usable on their own. A repo keeps its own test jobs and
-specifics (Docker, Homebrew).
+Shared release steps for vladkens' repos, as GitHub Actions used like `vladkens/actions/rust-build@v1` (`v1` moves to each compatible release). A repo's `build` job builds and uploads the release files with no secrets and no write token; its `publish` job gets those and never compiles. A release is a squash-merged release PR: CI on that commit tags it and publishes. Test jobs and repo specifics (Docker, store uploads) stay in each repo.
 
-| Action | Does |
-| --- | --- |
-| rust-build | Read-only: checks a release commit or PR, builds the release files, uploads them |
-| rust-dist | Builds a crate's binaries for a list of targets and packs them with the readme and license |
-| rust-publish | Writes, never compiles: the dev pre-release, or crates.io + tag + GitHub release |
-| py-build | Read-only: checks a release PR, builds the sdist and wheel with uv, uploads them |
-| py-publish | Writes, never builds: on a release commit checks the files, tag + GitHub release |
-| [release-commit](release-commit/readme.md) | Is this run a release: a push of a `release: vX.Y.Z` commit to the default branch |
-| [release-check](release-check/readme.md) | `release: vX.Y.Z` commit or PR title = manifest version; notes from `changelog.md`; finished plans in `docs/plans/completed/` |
-| [github-release](github-release/readme.md) | Tag, GitHub release, assets; a re-run uploads only what is missing, or all of a leftover draft's |
-| [dev-release](dev-release/readme.md) | Rolling `dev` pre-release with the latest build's assets |
-| [crates-publish](crates-publish/readme.md) | `cargo publish`; skips a version already on crates.io |
-| dev-version | Non-release builds report `git describe`'s version (e.g. `0.9.0-12-g3672a1b`) |
-| homebrew-bump | Points a tap's formula at the release's archive; nothing without a release |
-| [macos-sign](macos-sign/readme.md) | Developer ID signature and notarization for the macOS release files, in a job of its own |
+## Actions
 
-Use them as `vladkens/actions/<action>@v1`. `v1` moves to each compatible release.
+| Action | What it does | Trust |
+| --- | --- | --- |
+| [rust-build](rust-build/) | Checks a release commit or PR, builds the release files and uploads them for rust-publish | Runs the project's build scripts; gets no secrets and no write token |
+| [rust-publish](rust-publish/) | Publishes rust-build's files: the rolling dev pre-release, or crates.io, the tag and the GitHub release | Gets the write token and OIDC; never compiles, runs only the repo's `pack` command |
+| [py-build](py-build/) | Checks a release PR, builds the sdist and wheel with uv and uploads them for py-publish | Runs the project's build backend; gets no secrets and no write token |
+| [py-publish](py-publish/) | On a release commit checks py-build's files and creates the tag and GitHub release for the PyPI upload after it | Gets the write token; never builds or runs project code |
+| [homebrew-bump](homebrew-bump/) | Points a tap's formula at the release's archive; does nothing without a release | Gets a token that pushes to the tap; runs no project code |
 
-The building blocks are Node 24 JavaScript actions run from their TypeScript source: no build step
-and no dependencies on the runner. They talk to GitHub through `gh`, preinstalled on the hosted
-Ubuntu and macOS runners, with the job's `GITHUB_TOKEN` by default. rust-build and rust-publish
-are composite actions that chain them with the official `actions/attest` and
-`rust-lang/crates-io-auth-action`, calling this repo's actions through `$/` so all run at the same
-commit.
+Each one's readme has its usage, inputs and outputs. The JavaScript actions run on the runner's Node 24 and need `gh` and `git`, preinstalled on GitHub-hosted runners.
 
-## Releasing
+## Building blocks
 
-1. A `release: vX.Y.Z` PR bumps the version in the manifest and adds the `## vX.Y.Z – date` section to `changelog.md`; it is squash-merged, so the commit on `main` is `release: vX.Y.Z (#N)`.
-2. Before the merge, the repo's `build` job checks the release PR with [release-check](release-check/readme.md): the title against the manifest, the changelog section, the plans in `docs/plans/` (none finished outside `completed/`, each completed one with its `Done:` date and `## Result`), and that the tag doesn't exist yet. So that job must also run on release PRs: `if: "github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' || startsWith(github.event.pull_request.title, 'release: v')"`. A PR renamed to `release: vX.Y.Z` after it was opened runs it again only with `edited` in `on.pull_request.types` (e.g. `types: [opened, synchronize, reopened, edited]`).
-3. CI on the merged commit's push checks it again, publishes the package and creates the tag and the GitHub release. No one pushes tags by hand.
-4. A failed run is fixed by re-running it: every step skips what is already done.
-5. Only the repo owner releases (rust-publish's and py-publish's `releasers`, logins separated by spaces or commas): a release commit merged by anyone else fails before anything is published, and the owner re-runs that run to release it. Collaborators merge other PRs as usual.
+The actions above call these. They are useful on their own, but repos normally use the five above.
+
+| Action | What it does | Trust |
+| --- | --- | --- |
+| [release-commit](release-commit/) | Tells whether this run releases: a push of a `release: vX.Y.Z` commit to the default branch | Reads only the event; no token |
+| [release-check](release-check/) | Checks a release commit's or PR's title against the manifest version, the `changelog.md` section, the plans, the tag and who releases | Reads the checkout and the repo's tags; no secrets |
+| [github-release](github-release/) | Tags the commit and creates its GitHub release; a re-run uploads only missing assets, or replaces a leftover draft's | Needs `contents: write`; runs no project code |
+| [dev-release](dev-release/) | Points the rolling `dev` pre-release at this commit and replaces its assets | Needs `contents: write`; runs no project code |
+| [crates-publish](crates-publish/) | Runs `cargo publish`, or its dry run; skips a version already on crates.io | Gets the crates.io token; compiles the crate unless `no-verify` |
+| [dev-version](dev-version/) | Sets a non-release build's version in Cargo.toml and Cargo.lock to `git describe`'s (`0.9.0-12-g3672a1b`) | Edits only the checkout; no secrets, runs no project code |
+| [rust-dist](rust-dist/) | Builds a crate's binaries for a list of targets and packs each with the readme and license | Runs the project's build scripts; needs no token |
 
 ## A Rust repo
 
 ```yaml
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, edited] # edited: a PR renamed to `release: v…`
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A running main run (and its dev release) is never cut off, but a newer push replaces a still-pending one; a release commit gets its own group, so it is never replaced; PR runs cancel each other.
+concurrency:
+  group: ${{ github.workflow }}-${{ startsWith(github.event.head_commit.message, 'release:') && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
     # ...
 
-  # Read-only: dependencies' build scripts run here, so no `permissions:` beyond the top-level
-  # `contents: read`. Beside `test`, on the default branch and on release PRs, which it checks.
+  # No secrets, no write token: dependencies' build scripts run here. Also on release PRs, which it checks.
   build:
     if: "github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' || startsWith(github.event.pull_request.title, 'release: v')"
     runs-on: macos-latest
@@ -71,68 +74,21 @@ jobs:
       - uses: vladkens/actions/rust-publish@v1
 ```
 
-- A release commit publishes the crate and creates the release with its files renamed from
-  `<name>-dev` to `<name>-vX.Y.Z` (`<name>` is the repo's name unless set). With `dev: true` on
-  rust-build, every push to the default branch also builds them and rust-publish puts them up
-  as the rolling `dev` pre-release (for testing fixes, or a baseline to compare against); off
-  by default, so other pushes build nothing.
-- Outside release commits and release PRs rust-build first sets the package version in Cargo.toml and Cargo.lock
-  to `git describe` against the last `vX.Y.Z` tag (`0.9.0-12-g3672a1b`: 12 commits after
-  v0.9.0), so dev builds say what they are; a release builds its plain version.
-  `dev-version: false` turns it off.
-- rust-publish decides what to publish from the event and the commit, never from the artifact, and refuses files not named `<name>-dev*` (or, from a `pack` command, `update.txt` and on a release `<name>-<tag>*`). It does nothing on pull requests or other branches.
-- On a release PR rust-build runs release-check in PR mode and `cargo publish --dry-run` (unless `crates: false`), then builds the release files with the plain version as the release will (even without `dev: true`), so a broken dist build shows before the merge. `publish` is skipped there by its `if:`.
-- rust-build fails in a job with `id-token: write`; it can't see `contents: write`, so keep every
-  write permission to the publish job.
-- `targets` builds the binaries (Apple ones on the Mac, Linux and Windows through
-  [cargo-cross](https://github.com/zijiren233/cargo-cross), glibc 2.28) into
-  `<name>-dev-<target>.tar.gz` (`.zip` for Windows) with the readme and license; no Makefile target
-  needed. `profile: dist` builds another cargo profile; with debug info the macOS archives also
-  get `<bin>.dSYM`. `dist: <command>` replaces it all when a repo ships something else.
-- Inputs: `rust-build/action.yml`, `rust-publish/action.yml`. A crate without binaries drops
-  `targets` and sets `files: false` on rust-publish; `crates: false` skips crates.io. Output `tag` is the released tag, empty otherwise, for steps after it (a
-  Homebrew formula, say).
-- `pack: <command>` on rust-publish makes the release files there instead, from rust-build's files (bare binaries in `target/distrib/<target>/` from a `dist` command, say): an app's .app and disk image, installers, an update feed. It runs in the checkout after the download, with `LABEL` (`dev`, or the tag on a release, which release-check has checked by then), `TAG` (empty for dev) and the step's `env`, its secrets included. Of the files it leaves at the top of `target/distrib`, only `<name>-dev*` ones, `update.txt` and, on a release, `<name>-<tag>*` ones it names itself are published (any other fails the step); its subfolders are not. The `<name>-dev*` ones are renamed to `<name>-<tag>*` on a release like rust-build's; `update.txt` and its own `<name>-<tag>*` ones are published as they are (an update feed signed over their names, say). Like the rest of the job it must not compile.
-
-  ```yaml
-      - uses: vladkens/actions/rust-publish@v1
-        with:
-          pack: make pack
-        env:
-          SIGN_KEY: ${{ secrets.SIGN_KEY }}
-  ```
-- A macOS app is signed and notarized in `publish` by its `pack` command, with the certificate
-  and the API key in the step's `env`.
-- Keep the workflow's `concurrency` queueing default-branch runs (not cancelling them), so two
-  dev updates don't overlap.
-- A Homebrew formula follows a release with one more step in `publish`, after
-  `- id: release` `uses: vladkens/actions/rust-publish@v1`:
-
-  ```yaml
-      - uses: vladkens/actions/homebrew-bump@v1
-        with:
-          tag: ${{ steps.release.outputs.tag }} # empty unless released: then it does nothing
-          file: ${{ steps.release.outputs.files }} # the one archive the formula downloads
-          tap: vladkens/homebrew-tap
-          token: ${{ secrets.HOMEBREW_REPO_TOKEN }} # can push to the tap
-  ```
-
-  It sets the formula's (`<repo>.rb`, or `formula`) `url`, `sha256` and `version` from the
-  published archive and pushes as github-actions[bot]; formulas with one download only.
-- crates.io's Trusted Publishing settings name the repo's workflow file (e.g. `main.yml`), and
-  attestations verify with `gh attestation verify FILE -R <owner>/<repo>`. A private repo gets no
-  attestations: GitHub offers them there only on Enterprise Cloud.
-- `GITHUB_TOKEN` can't create a tag on a commit whose `.github/workflows` differ from the default
-  branch (it has no `workflows` permission): keep workflow edits out of release PRs.
+- A release publishes the crate and the files renamed from `<name>-dev` to `<name>-vX.Y.Z`; the targets, the dev pre-release, crates.io and `pack` (the final release files, made in `publish`) are inputs of [rust-build](rust-build/) and [rust-publish](rust-publish/).
+- A Homebrew formula follows a release with [homebrew-bump](homebrew-bump/) as one more step in `publish`.
 
 ## A Python repo
 
 ```yaml
+# The same `on:` as the Rust example.
+permissions:
+  contents: read
+
 jobs:
   test:
     # ...
 
-  # Read-only: the build backend runs here.
+  # No secrets, no write token: the build backend runs here. Runs on every PR, so it checks release PRs.
   build:
     runs-on: ubuntu-latest
     steps:
@@ -158,29 +114,20 @@ jobs:
           skip-existing: true
 ```
 
-- On a release PR (titled `release: v…`) py-build first runs release-check in PR mode, and builds the files as on any other run (the build job runs on every PR here, so no `if:` is needed; renamed PRs still need `edited`).
-- Every run builds the files (cheap, and it checks the packaging). On a release commit py-publish
-  downloads them into `dist/`, creates the tag and the GitHub release with the changelog's notes,
-  and [pypa/gh-action-pypi-publish](https://github.com/pypa/gh-action-pypi-publish) uploads them
-  to PyPI through Trusted Publishing, with PEP 740 attestations. A failed upload is fixed by
-  re-running the job. No dev pre-release.
-- py-publish refuses files other than `<name>-<version>.tar.gz` and `<name>-<version>-*.whl`
-  (the normalized project name and the release's version, which must be canonical PEP 440).
-- PyPI's Trusted Publisher names the repo's workflow file (e.g. `main.yml`), with no environment.
-- The readme becomes the PyPI page: link images by absolute URL.
-- Inputs: `py-build/action.yml`, `py-publish/action.yml`.
+There is no dev pre-release for Python; a failed PyPI upload is fixed by re-running the job.
 
-## Tools
+## Rules
 
-[tools.yml](.github/workflows/tools.yml), run by hand, builds static Linux x86_64 `dmg` and
-`hfsplus` from [mozilla/libdmg-hfsplus](https://github.com/mozilla/libdmg-hfsplus) at a pinned
-commit, for making macOS disk images on Linux, checks them on an HFS+ image, and releases them
-here as `tools-<yyyymmdd>` with the LICENSE and a `SHA256SUMS`. Their users (nimbo's pack.py) pin
-the hashes; a new build is a new release, and a day's release is never rebuilt:
-`gh workflow run tools.yml`.
+- Permissions: `build` runs the project's build code, so it gets no `permissions:` beyond the top-level `contents: read` (rust-build fails in a job with `id-token: write`); every write permission goes to `publish`, which never compiles.
+- Secrets: crates.io and PyPI publish through Trusted Publishing, set up with the repo's workflow file (e.g. `main.yml`) and, on PyPI, no environment or the one `publish` uses; GitHub calls use the job's `GITHUB_TOKEN`; other secrets (a signing key, the tap token) go in the step's `env` or inputs.
+- Release flow: a `release: vX.Y.Z` PR bumps the manifest version and adds a `## vX.Y.Z – date` section to `changelog.md`; `build` checks it with [release-check](release-check/) and builds the release files. A PR renamed to `release: …` later reruns only with `edited` in `on.pull_request.types`.
+- The PR is squash-merged, so `main` gets `release: vX.Y.Z (#N)`, and CI on that push publishes the package and creates the tag and the GitHub release; no one pushes tags by hand.
+- rust-publish and py-publish decide what to publish from the event and the commit, never from the artifact, and accept only the expected file names.
+- release-check blocks a release on a finished plan left outside `docs/plans/completed/` or a completed one without `Done:` and `## Result`, and on a PR also on an existing tag.
+- Only `releasers` (the repo owner by default) release: a release commit merged by anyone else fails before anything is published, and the owner re-runs it.
+- A failed run is fixed by re-running it: every step skips what is already done.
+- Keep workflow edits out of release PRs: `GITHUB_TOKEN` can't tag a commit whose `.github/workflows` differs from the default branch.
 
-## Development
+## Contributing
 
-[agents.md](agents.md) has the rules; `make check` type-checks and runs the unit tests;
-[test.yml](.github/workflows/test.yml) runs every action in CI, releases against this repo with
-throwaway tags.
+Pull requests are welcome, including ones made with agents: point yours at [agents.md](agents.md).

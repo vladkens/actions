@@ -9,10 +9,10 @@ inputs:
     default: release
   name:
     description: The archives' prefix, `<name>-dev-<target>`; the repo's name when empty.
-    default: ''
+    default: ""
   working-directory:
     description: The crate's directory.
-    default: ''
+    default: ""
 outputs:
   files:
     description: The archives, one per line.

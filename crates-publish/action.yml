@@ -3,19 +3,19 @@ description: Publish a crate to crates.io, unless this version is already there.
 inputs:
   token:
     description: "A crates.io token: `rust-lang/crates-io-auth-action`'s `token` output. Not needed with `dry-run`."
-    default: ''
+    default: ""
   manifest-path:
     description: The crate's or workspace's Cargo.toml.
     default: Cargo.toml
   package:
     description: The package to publish; needed in a workspace without a root package.
-    default: ''
+    default: ""
   no-verify:
     description: Pass `--no-verify`, when an earlier job already ran `cargo publish --dry-run`.
-    default: 'false'
+    default: "false"
   dry-run:
     description: Run `cargo publish --dry-run` instead, without a token; works in a read-only job.
-    default: 'false'
+    default: "false"
 outputs:
   skipped:
     description: "`true` when this version was already on crates.io."

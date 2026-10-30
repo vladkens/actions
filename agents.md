@@ -1,60 +1,30 @@
 # actions
 
-Shared release steps for vladkens' repos, as GitHub Actions used like
-`vladkens/actions/rust-build@v1`. A Rust repo's release is two of them, rust-build and
-rust-publish, built from the smaller ones here. Each repo keeps its own test jobs. Agents
-carry out each change end to end by following this file; plans live in `docs/plans/`.
+Shared release steps for vladkens' repos, as GitHub Actions used like `vladkens/actions/rust-build@v1`: a Rust repo releases with rust-build and rust-publish, a Python repo with py-build and py-publish. These are composite actions; rust-build, rust-publish and py-publish chain the smaller JavaScript actions here, which also work on their own.
 
-Each fact has one source: an action's inputs and outputs are its `action.yml`, its usage its
-`readme.md`, checks the `Makefile` and `.github/workflows/test.yml`.
+An action's inputs and outputs are in its `action.yml`, its usage in the top `readme.md` or the action's own `readme.md`, the checks in the `Makefile` and `.github/workflows/test.yml`, plans in `docs/plans/`. Docs stay in these places: no progress journals or run logs.
 
-## Scope
+## Boundaries
 
-- Generalize only what the repos share. Build commands, asset sets, Docker, Homebrew and store
-  uploads stay in each repo.
-- Releases start from a squash-merged `release: vX.Y.Z (#N)` commit on `main`; the tag is always
-  created here, in CI. No tag-push trigger.
-- No runtime dependencies and no build step: each action is `runs.using: node24` with
-  `main: index.ts`, run by the runner's Node through type stripping. Write erasable TypeScript
-  only (no enums, namespaces, parameter properties), import with the `.ts` extension and
-  `import type` for types. Shared code goes in `lib/`. Talk to GitHub through `gh` and `git`,
-  both preinstalled on the hosted runners.
-- A JavaScript action can't call another action: steps that need an official one stay in the
-  calling workflow (`actions/attest`, `rust-lang/crates-io-auth-action`) and pass their outputs
-  in. Don't reimplement them.
-- Composite actions call this repo's actions with `$/<action>`, so all run at one commit.
-  rust-build runs build scripts and must stay read-only; rust-publish writes and must never
-  compile, and trusts nothing from the build's artifact but the files' bytes.
-
-## Code
-
-- One directory per action: `action.yml`, `index.ts`, `readme.md` (inputs, outputs, required
-  permissions, an example).
-- Every action is safe to re-run: check what already exists (tag, release, asset, published
-  version) and do only what is missing.
-- Untrusted values (commit messages, inputs) reach commands only as arguments or env, never
-  through string interpolation into a shell.
-- Fail with one clear `::error::` line that says what was expected and what was found.
-- Keep each action small and readable; no generic framework.
-
-## Testing
-
-- `make check` type-checks and runs the unit tests (`node --test`) on the fixtures in `tests/`.
-- `test.yml` runs every action in this repo's CI, with `dry-run` for publishing.
-- Never publish test packages to crates.io, npm or PyPI. Exercise releases only against this
-  repo, with throwaway tags that the test deletes.
-
-## Workflow
-
-- Agree a plan with the person first. For multi-step work keep a checklist in
-  `docs/plans/yyyymmdd-<name>.md` and during the work only tick its checkboxes, with no progress
-  prose. When the last item is done, add a first line `Done: yyyy-mm-dd` and a short `## Result`,
-  and move the plan to `docs/plans/completed/`. Plans stay; never delete them.
-- Commit to `main` every step that passes `make check`: one short lowercase line, no body, docs
-  updated in the same commit.
+- Generalize only what the repos share: test jobs, build commands, asset sets, Docker, Homebrew and store uploads stay in each repo.
+- Releases start from a squash-merged `release: vX.Y.Z (#N)` commit on `main`, and its tag is always created by these actions in CI; no tag-push trigger.
 - Move the `v1` tag only with the person's approval: every repo using `@v1` picks it up at once.
-- Adopting an action in another repo follows that repo's own `agents.md`.
-- Report a blocker as soon as you hit it (a missing permission, a registry limitation, a failing
-  service), say what can still be done without it, and keep doing that part.
-- Keep docs to `readme.md`, each action's `readme.md` and `docs/plans/`. No progress journals or
-  run logs.
+- Changes land on `main` through a PR; never push to `main` directly.
+- No runtime dependencies and no build step: each JavaScript action is `runs.using: node24` with `main: index.ts`, run by the runner's Node through type stripping, and talks to GitHub only through `gh` and `git`, preinstalled on the hosted runners.
+- A JavaScript action can't call another action: an official one (`actions/attest`, `rust-lang/crates-io-auth-action`) runs as a step of a composite action, or of the calling workflow when it can't run in a composite (`pypa/gh-action-pypi-publish`); never reimplement it.
+- Composite actions call this repo's actions as `$/<action>`, so all run at one commit.
+- rust-build and py-build run the project's build code and get no secrets or write token; rust-publish and py-publish write, never compile or run a build backend (rust-publish's `pack` only repackages rust-build's files), and trust nothing from the build's artifact but the files' bytes.
+- Never publish test packages to crates.io, npm or PyPI; exercise releases only against this repo, crates.io only through `dry-run`, under throwaway tags the test deletes.
+- Adopting an action in another repo follows that repo's `agents.md`.
+
+## Conventions
+
+- One directory per action: `action.yml` and a JavaScript action's `index.ts` with its helpers beside it; shared code goes in `lib/`, unit tests in `tests/<action>.test.ts` on inline strings, in a temp dir when they need files; `tests/fixtures/` holds only the projects test.yml runs the actions on.
+- Every action repos call directly (the top readme's Actions table) has a `readme.md`: a usage snippet, inputs and outputs; a building block has one when it has more to say than its table row.
+- Imports keep the `.ts` extension: `.js` passes tsc but fails in Node.
+- Every action is safe to re-run: it checks what already exists (tag, release, asset, published version) and does only what is missing.
+- Untrusted values (commit messages, inputs) reach commands only as arguments or env, never through string interpolation into a shell.
+- Fail with one `::error::` line that says what was expected and what was found; with `EXPECT_FAILURE` set, which only test.yml's expected-failure steps do, it is a plain `expected failure:` line, so those cases don't annotate the run.
+- Agree a plan with the person first. Multi-step work keeps a checklist in `docs/plans/yyyymmdd-<name>.md`, and during the work only its checkboxes are ticked, with no progress prose; when the last item is done, add `Done: yyyy-mm-dd` below the title and a short `## Result`, and move the plan to `docs/plans/completed/`. Never delete plans.
+- `make prepare` formats (oxfmt) and autofixes (oxlint); `make check test` and test.yml pass before a merge.
+- A commit is one short lowercase line, prefixed with `<action>: ` or its area (`ci: `, `test: `, `readme: `) when it concerns one, with no body and with the docs updated in the same commit.

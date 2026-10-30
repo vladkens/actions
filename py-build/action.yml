@@ -15,7 +15,10 @@ runs:
       shell: bash
       run: |
         if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
-          echo "::error::py-build runs the build backend: give its job no 'id-token: write' (and no write permissions)"
+          msg="py-build runs the build backend: give its job no 'id-token: write' (and no write permissions)"
+          # test.yml's negative case: a plain line, no annotation.
+          if [ -n "${EXPECT_FAILURE:-}" ]; then echo "expected failure: $msg"; else echo "::error::$msg"; fi
+
           exit 1
         fi
 

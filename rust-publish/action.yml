@@ -3,16 +3,16 @@ description: The writing half of a Rust release. Publishes rust-build's files as
 inputs:
   files:
     description: Expect release files from rust-build; `false` for a crate without binaries.
-    default: 'true'
+    default: "true"
   crates:
     description: Publish the crate to crates.io on a release commit (Trusted Publishing).
-    default: 'true'
+    default: "true"
   dev:
     description: Publish the default branch's files as the rolling dev pre-release.
-    default: 'true'
+    default: "true"
   name:
     description: The files' prefix, renamed from `<name>-dev` to `<name>-vX.Y.Z` on a release; the repo's name when empty.
-    default: ''
+    default: ""
   releasers:
     description: GitHub logins allowed to release, separated by spaces or commas. A release commit merged by anyone else fails before anything is published; one of them re-runs it.
     default: ${{ github.repository_owner }}
@@ -24,10 +24,10 @@ inputs:
     default: dev
   dev-branch:
     description: The branch whose pushes update the dev pre-release; the default branch when empty.
-    default: ''
+    default: ""
   pack:
     description: A command that makes the release files from rust-build's, run in the checkout after the download with `LABEL` (`dev` or the tag) and `TAG` (empty for dev) plus the step's own env. Of the files it leaves at the top of target/distrib, only `<name>-dev*` ones, `update.txt` and, on a release, `<name>-<tag>*` ones it names itself are published (any other fails the step); its subfolders are not. The `<name>-dev*` ones are renamed to `<name>-<tag>*` on a release like rust-build's; `update.txt` and its own `<name>-<tag>*` ones are published as they are (an update feed signed over their names, say). Must not compile.
-    default: ''
+    default: ""
 outputs:
   tag:
     description: The released tag; empty when this run released nothing.
@@ -107,6 +107,13 @@ runs:
         # `<name>-<tag>` on a release with a pack command, else empty.
         TAGGED: ${{ inputs.pack != '' && steps.check.outputs.tag != '' && format('{0}-{1}', steps.mode.outputs.name, steps.check.outputs.tag) || '' }}
       run: |
+        # Fails the step; under test.yml's EXPECT_FAILURE a plain line, not an annotation.
+        refuse() {
+          if [ -n "${EXPECT_FAILURE:-}" ]; then echo "expected failure: $1"; else echo "::error::$1"; fi
+
+          exit 1
+        }
+
         for f in target/distrib/* target/distrib/.[!.]*; do
           [ -e "$f" ] || [ -L "$f" ] || continue
           name=${f#target/distrib/}
@@ -126,21 +133,18 @@ runs:
           if [ -n "$TAGGED" ] && [[ "$name" == "$TAGGED"* ]] && [ -f "$f" ] && [ ! -L "$f" ]; then
             twin=$PREFIX${name#"$TAGGED"}
             if [[ "$name" == *"$PREFIX"* ]]; then
-              echo "::error::found '$name', named for the tag but containing '$PREFIX': the release's rename would change its name; expected no '$PREFIX' in it"
-              exit 1
+              refuse "found '$name', named for the tag but containing '$PREFIX': the release's rename would change its name; expected no '$PREFIX' in it"
             fi
 
             if [ -f "target/distrib/$twin" ]; then
-              echo "::error::found '$twin' beside '$name': the release's rename would overwrite '$name' with it; expected only one of them"
-              exit 1
+              refuse "found '$twin' beside '$name': the release's rename would overwrite '$name' with it; expected only one of them"
             fi
 
             continue
           fi
 
           if [ -L "$f" ] || [ ! -f "$f" ] || [[ "$name" != "$PREFIX"* ]]; then
-            echo "::error::unexpected '$name' in the release files: expected regular files named '$PREFIX*'${TAGGED:+ or '$TAGGED*'}"
-            exit 1
+            refuse "unexpected '$name' in the release files: expected regular files named '$PREFIX*'${TAGGED:+ or '$TAGGED*'}"
           fi
         done
 
