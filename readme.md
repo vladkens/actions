@@ -41,7 +41,7 @@ on:
 permissions:
   contents: read
 
-# Main runs queue, so a dev release is never cut off; a release commit gets its own group.
+# A running main run (and its dev release) is never cut off, but a newer push replaces a still-pending one; a release commit gets its own group, so it is never replaced; PR runs cancel each other.
 concurrency:
   group: ${{ github.workflow }}-${{ startsWith(github.event.head_commit.message, 'release:') && github.sha || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -78,7 +78,7 @@ jobs:
 - `crates: false` on both actions skips crates.io, for a crate with `publish = false` or one not meant for it.
 - `targets` builds Apple targets on the Mac and Linux and Windows ones through [cargo-cross](https://github.com/zijiren233/cargo-cross) (glibc 2.28); `dist: <command>` replaces it when a repo ships something else.
 - Outside release commits and release PRs rust-build sets the package version to what `git describe` gives (`0.9.0-12-g3672a1b`), so dev builds say what they are; `dev-version: false` turns it off.
-- With `dev: true` on rust-build, every push to `main` also builds the files and rust-publish updates the rolling `dev` pre-release; keep the workflow's `concurrency` queueing `main` runs, not cancelling them.
+- With `dev: true` on rust-build, every push to `main` also builds the files and rust-publish updates the rolling `dev` pre-release; keep the workflow's `concurrency` from cancelling running `main` runs.
 - Attestations verify with `gh attestation verify FILE -R <owner>/<repo>`; a private repo gets none.
 - `pack: <command>` on rust-publish makes the final release files from rust-build's (an app bundle and disk image, installers, an update feed), with `LABEL` (`dev` or the tag), `TAG` (empty for dev) and the step's `env`, its secrets included; a macOS app is signed and notarized there. It must not compile, and of the files it leaves at the top of `target/distrib` only `<name>-dev*`, `update.txt` and, on a release, `<name>-<tag>*` are published (subfolders are skipped; any other file fails the step).
 
