@@ -35,7 +35,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    types: [opened, synchronize, reopened, edited] # edited: a PR renamed to `release: v…`
   workflow_dispatch:
 
 permissions:
@@ -120,7 +119,7 @@ There is no dev pre-release for Python; a failed PyPI upload is fixed by re-runn
 
 - Permissions: `build` runs the project's build code, so it gets no `permissions:` beyond the top-level `contents: read` (rust-build fails in a job with `id-token: write`); every write permission goes to `publish`, which never compiles.
 - Secrets: crates.io and PyPI publish through Trusted Publishing, set up with the repo's workflow file (e.g. `main.yml`) and, on PyPI, no environment or the one `publish` uses; GitHub calls use the job's `GITHUB_TOKEN`; other secrets (a signing key, the tap token) go in the step's `env` or inputs.
-- Release flow: a `release: vX.Y.Z` PR bumps the manifest version and adds a `## vX.Y.Z – date` section to `changelog.md`; `build` checks it with [release-check](release-check/) and builds the release files. A PR renamed to `release: …` later reruns only with `edited` in `on.pull_request.types`.
+- Release flow: a `release: vX.Y.Z` PR bumps the manifest version and adds a `## vX.Y.Z – date` section to `changelog.md`; `build` checks it with [release-check](release-check/) and builds the release files. Open it with that title: renaming a PR later doesn't rerun CI until its next push.
 - The PR is squash-merged, so `main` gets `release: vX.Y.Z (#N)`, and CI on that push publishes the package and creates the tag and the GitHub release; no one pushes tags by hand.
 - rust-publish and py-publish decide what to publish from the event and the commit, never from the artifact, and accept only the expected file names.
 - release-check blocks a release on a finished plan left outside `docs/plans/completed/` or a completed one without `Done:` and `## Result`, and on a PR also on an existing tag.
