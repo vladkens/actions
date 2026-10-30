@@ -83,8 +83,7 @@ jobs:
   to `git describe` against the last `vX.Y.Z` tag (`0.9.0-12-g3672a1b`: 12 commits after
   v0.9.0), so dev builds say what they are; a release builds its plain version.
   `dev-version: false` turns it off.
-- rust-publish decides what to publish from the event and the commit, never from the artifact,
-  and refuses files not named `<name>-dev*`. It does nothing on pull requests or other branches.
+- rust-publish decides what to publish from the event and the commit, never from the artifact, and refuses files not named `<name>-dev*` (or, from a `pack` command on a release, `<name>-<tag>*`). It does nothing on pull requests or other branches.
 - rust-build fails in a job with `id-token: write`; it can't see `contents: write`, so keep every
   write permission to the publish job.
 - `targets` builds the binaries (Apple ones on the Mac, Linux and Windows through
@@ -95,14 +94,7 @@ jobs:
 - Inputs: `rust-build/action.yml`, `rust-publish/action.yml`. A crate without binaries drops
   `targets` and sets `files: false` on rust-publish; `crates: false` skips crates.io. Output `tag` is the released tag, empty otherwise, for steps after it (a
   Homebrew formula, say).
-- `pack: <command>` on rust-publish makes the release files there instead, from rust-build's
-  files (bare binaries in `target/distrib/<target>/` from a `dist` command, say): an app's .app
-  and disk image, installers, an update feed. It runs in the checkout after the download, with
-  `LABEL` (`dev`, or the tag on a release, which release-check has checked by then), `TAG` (empty
-  for dev) and the step's `env`, its secrets included. The files it leaves at the top of
-  `target/distrib` keep rust-build's `<name>-dev-*` names and are renamed on a release like
-  theirs; `update.txt` is published as it is, and its subfolders are not. Like the rest of the job
-  it must not compile.
+- `pack: <command>` on rust-publish makes the release files there instead, from rust-build's files (bare binaries in `target/distrib/<target>/` from a `dist` command, say): an app's .app and disk image, installers, an update feed. It runs in the checkout after the download, with `LABEL` (`dev`, or the tag on a release, which release-check has checked by then), `TAG` (empty for dev) and the step's `env`, its secrets included. The files it leaves at the top of `target/distrib` are published, its subfolders are not. Named `<name>-dev*` like rust-build's, they are renamed to `<name>-<tag>*` on a release like theirs; on a release it may name them `<name>-<tag>*` itself (an update feed signed over their names, say), and those and `update.txt` are published as they are. Like the rest of the job it must not compile.
 
   ```yaml
       - uses: vladkens/actions/rust-publish@v1
