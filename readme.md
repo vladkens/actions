@@ -15,7 +15,7 @@ specifics (Docker, Homebrew).
 | py-publish | Writes, never builds: on a release commit checks the files, tag + GitHub release |
 | [release-commit](release-commit/readme.md) | Is this run a release: a push of a `release: vX.Y.Z` commit to the default branch |
 | [release-check](release-check/readme.md) | `release: vX.Y.Z` commit or PR title = manifest version; notes from `changelog.md`; finished plans in `docs/plans/completed/` |
-| [github-release](github-release/readme.md) | Tag, GitHub release, assets; a re-run uploads only what is missing |
+| [github-release](github-release/readme.md) | Tag, GitHub release, assets; a re-run uploads only what is missing, or all of a leftover draft's |
 | [dev-release](dev-release/readme.md) | Rolling `dev` pre-release with the latest build's assets |
 | [crates-publish](crates-publish/readme.md) | `cargo publish`; skips a version already on crates.io |
 | dev-version | Non-release builds report `git describe`'s version (e.g. `0.9.0-12-g3672a1b`) |

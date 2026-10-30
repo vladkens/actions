@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { env, fail, files, input, main, required, setOutput } from '../lib/core.ts'
 import { findRelease, gh, setTag, tagCommit } from '../lib/github.ts'
+import { assetSteps } from './assets.ts'
 
 await main(() => {
   const tag = required('tag')
@@ -36,16 +37,17 @@ await main(() => {
     const title = input('title') || tag
     gh(['release', 'create', tag, ...paths, '--verify-tag', '--title', title, '--notes-file', notesFile], true)
   } else {
-    // A re-run keeps what is published: assets already there are downloaded over the local files,
-    // so later steps (attestation, checksums) see the published bytes.
-    for (const path of paths) {
-      const name = basename(path)
-      if (release.assets.includes(name)) {
-        gh(['release', 'download', tag, '--pattern', name, '--dir', dirname(path), '--clobber'])
+    // A re-run keeps what is published, so later steps (attestation, checksums) see the published
+    // bytes; a draft takes every file anew (assets.ts).
+    const steps = assetSteps(release, paths.map((x) => basename(x)))
+    paths.forEach((path, i) => {
+      if (steps[i] === 'download') {
+        gh(['release', 'download', tag, '--pattern', basename(path), '--dir', dirname(path), '--clobber'])
       } else {
-        gh(['release', 'upload', tag, path], true)
+        gh(['release', 'upload', tag, path, ...(steps[i] === 'replace' ? ['--clobber'] : [])], true)
       }
-    }
+    })
+
     // `gh release create` uploads to a draft and publishes it last, deleting it on failure; finish
     // one whose deletion failed too.
     if (release.isDraft) gh(['release', 'edit', tag, '--draft=false'])
