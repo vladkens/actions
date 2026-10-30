@@ -1,5 +1,5 @@
 name: py-build
-description: The read-only half of a Python release. Builds the sdist and wheel with uv and uploads them for py-publish.
+description: The read-only half of a Python release. Checks a release PR, builds the sdist and wheel with uv and uploads them for py-publish.
 inputs:
   working-directory:
     description: The directory with pyproject.toml.
@@ -18,6 +18,14 @@ runs:
           echo "::error::py-build runs the build backend: give its job no 'id-token: write' (and no write permissions)"
           exit 1
         fi
+
+    # A release PR is checked before its merge, ahead of the build backend: read-only, the job's
+    # token reads the tags. The release commit is checked by py-publish.
+    - if: "github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'release: v')"
+      uses: $/release-check
+      with:
+        manifest: ${{ inputs.working-directory }}/pyproject.toml
+        changelog: ${{ inputs.working-directory }}/changelog.md
 
     - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
       with:

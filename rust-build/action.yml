@@ -1,5 +1,5 @@
 name: rust-build
-description: The read-only half of a Rust release. Checks a release commit, builds the release files and uploads them for rust-publish.
+description: The read-only half of a Rust release. Checks a release commit or PR, builds the release files and uploads them for rust-publish.
 inputs:
   targets:
     description: Rust targets to build the binaries for, packed with the readme and license as `<name>-dev-<target>`; empty for a crate without binaries. Apple ones need a macOS runner.
@@ -14,13 +14,13 @@ inputs:
     description: Instead of `targets`, a command that builds the release files into target/distrib, named `<name>-dev*`.
     default: ''
   dev:
-    description: Also build the files on other pushes, for rust-publish's rolling dev pre-release. Off by default; release commits and manual runs always build.
+    description: Also build the files on other pushes, for rust-publish's rolling dev pre-release. Off by default; release commits, release PRs and manual runs always build.
     default: 'false'
   crates:
-    description: On a release commit, run `cargo publish --dry-run`.
+    description: On a release commit or PR, run `cargo publish --dry-run`.
     default: 'true'
   dev-version:
-    description: Outside release commits, build with the version `git describe` gives (e.g. 0.9.0-12-g3672a1b).
+    description: Outside release commits and release PRs, build with the version `git describe` gives (e.g. 0.9.0-12-g3672a1b).
     default: 'true'
   cache:
     description: Cache cargo's registry and target/ (Swatinem/rust-cache).
@@ -49,7 +49,14 @@ runs:
     - id: check
       if: steps.commit.outputs.release == 'true'
       uses: $/release-check
-    - if: steps.check.outcome == 'success' && inputs.crates == 'true'
+    # A release PR is checked before its merge too, and builds the release files as the release
+    # will, plain version included, so a broken build shows before the merge.
+    - id: pr-check
+      if: "github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'release: v')"
+      uses: $/release-check
+    # Read-only and without a token, so on the release PR too: a crate cargo won't package fails
+    # before the merge.
+    - if: (steps.check.outcome == 'success' || steps.pr-check.outcome == 'success') && inputs.crates == 'true'
       uses: $/crates-publish
       with:
         dry-run: true
@@ -59,7 +66,7 @@ runs:
       shell: bash
       env:
         FILES: ${{ inputs.targets != '' || inputs.dist != '' }}
-        RELEASE: ${{ steps.check.outcome == 'success' }}
+        RELEASE: ${{ steps.check.outcome == 'success' || steps.pr-check.outcome == 'success' }}
         DEV: ${{ inputs.dev }}
         EVENT: ${{ github.event_name }}
       run: |
@@ -82,8 +89,8 @@ runs:
           ${{ inputs.cache-directories }}
           ${{ inputs.targets != '' && '~/.cache/cargo-cross' || '' }}
     # After the cache, whose key hashes Cargo.lock. A release keeps its plain version: its files
-    # are published as they are.
-    - if: steps.plan.outputs.build == 'true' && inputs.dev-version == 'true' && steps.check.outcome == 'skipped'
+    # are published as they are. So does a release PR, which builds them the same way.
+    - if: steps.plan.outputs.build == 'true' && inputs.dev-version == 'true' && steps.check.outcome == 'skipped' && steps.pr-check.outcome == 'skipped'
       uses: $/dev-version
     - if: steps.plan.outputs.build == 'true' && inputs.targets != ''
       uses: $/rust-dist
