@@ -26,7 +26,7 @@ inputs:
     description: The branch whose pushes update the dev pre-release; the default branch when empty.
     default: ''
   pack:
-    description: A command that makes the release files from rust-build's, run in the checkout after the download with `LABEL` (`dev` or the tag) and `TAG` (empty for dev) plus the step's own env. The files it leaves at the top of target/distrib are published, its subfolders are not; `<name>-dev*` ones like rust-build's are renamed to `<name>-<tag>*` on a release, while `update.txt` and, on a release, `<name>-<tag>*` ones it names itself (an update feed signed over their names) are published as they are. Must not compile.
+    description: A command that makes the release files from rust-build's, run in the checkout after the download with `LABEL` (`dev` or the tag) and `TAG` (empty for dev) plus the step's own env. Of the files it leaves at the top of target/distrib, only `<name>-dev*` ones, `update.txt` and, on a release, `<name>-<tag>*` ones it names itself are published (any other fails the step); its subfolders are not. The `<name>-dev*` ones are renamed to `<name>-<tag>*` on a release like rust-build's; `update.txt` and its own `<name>-<tag>*` ones are published as they are (an update feed signed over their names, say). Must not compile.
     default: ''
 outputs:
   tag:
@@ -125,8 +125,13 @@ runs:
           # `<name>-dev` anywhere in a name, over what is there: it must not touch these.
           if [ -n "$TAGGED" ] && [[ "$name" == "$TAGGED"* ]] && [ -f "$f" ] && [ ! -L "$f" ]; then
             twin=$PREFIX${name#"$TAGGED"}
-            if [[ "$name" == *"$PREFIX"* ]] || [ -f "target/distrib/$twin" ]; then
-              echo "::error::'$name' must not contain '$PREFIX' or have a '$twin' beside it: the rename from '$PREFIX' would change or overwrite it"
+            if [[ "$name" == *"$PREFIX"* ]]; then
+              echo "::error::found '$name', named for the tag but containing '$PREFIX': the release's rename would change its name; expected no '$PREFIX' in it"
+              exit 1
+            fi
+
+            if [ -f "target/distrib/$twin" ]; then
+              echo "::error::found '$twin' beside '$name': the release's rename would overwrite '$name' with it; expected only one of them"
               exit 1
             fi
 
