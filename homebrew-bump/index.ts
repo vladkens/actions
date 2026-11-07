@@ -3,8 +3,8 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { basename, join } from "node:path"
 
-import { env, fail, input, main, mask, required, run, setOutput } from "../lib/core.ts"
-import { bumpFormula } from "./formula.ts"
+import { env, fail, files, input, main, mask, required, run, setOutput } from "../lib/core.ts"
+import { bumpFormula, bumpFormulaArchives } from "./formula.ts"
 
 await main(() => {
   const tag = input("tag")
@@ -13,15 +13,18 @@ await main(() => {
     setOutput("changed", "false")
     return
   }
-  const file = required("file")
-  if (file.includes("\n")) fail("'file' must be one file; pick the archive the formula downloads")
-  if (!existsSync(file)) fail(`no ${file}`)
+  required("file")
+  const paths = files("file")
+  if (paths.length > 1 && input("url"))
+    fail("'url' is for one file; several use their release assets")
   const tap = required("tap")
   const formula = input("formula") || `${env("GITHUB_REPOSITORY").split("/")[1]}.rb`
-  const url =
-    input("url") ||
-    `https://github.com/${env("GITHUB_REPOSITORY")}/releases/download/${tag}/${basename(file)}`
-  const sha256 = createHash("sha256").update(readFileSync(file)).digest("hex")
+  const archives = paths.map(file => ({
+    url:
+      input("url") ||
+      `https://github.com/${env("GITHUB_REPOSITORY")}/releases/download/${tag}/${basename(file)}`,
+    sha256: createHash("sha256").update(readFileSync(file)).digest("hex"),
+  }))
 
   // The token reaches git only through env (an http.extraheader for github.com), never the
   // command line that `run` logs.
@@ -43,7 +46,11 @@ await main(() => {
   const path = join(dir, formula)
   if (!existsSync(path)) fail(`no ${formula} in ${tap}`)
   const before = readFileSync(path, "utf8")
-  const after = bumpFormula(before, tag.replace(/^v/, ""), url, sha256)
+  const version = tag.replace(/^v/, "")
+  const after =
+    archives.length > 1
+      ? bumpFormulaArchives(before, version, archives)
+      : bumpFormula(before, version, archives[0].url, archives[0].sha256)
   if (after === before) {
     console.log(`${formula} is already at ${tag}`)
     setOutput("changed", "false")
@@ -61,6 +68,7 @@ await main(() => {
   run("git", ["-C", dir, "add", formula])
   run("git", ["-C", dir, ...bot, "commit", "--quiet", "-m", `${name} ${tag}`])
   run("git", ["-C", dir, "push", "--quiet"], { env: auth })
-  console.log(`${tap}: ${formula} → ${tag} (${url}, sha256 ${sha256})`)
+  for (const { url, sha256 } of archives.filter(x => after.includes(x.url)))
+    console.log(`${tap}: ${formula} → ${tag} (${url}, sha256 ${sha256})`)
   setOutput("changed", "true")
 })
