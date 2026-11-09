@@ -255,6 +255,13 @@ jobs:
           tar xzf target/distrib/fixture-dev-x86_64-unknown-linux-gnu.tar.gz -C unpacked
           test "$(unpacked/fixture-bin)" = "fixture-bin 0.1.0"
 
+  # The package managers against local repos, in a job of their own so a break elsewhere (rust-dist
+  # through cargo-cross, say) doesn't skip them.
+  packages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
       # homebrew-bump against a local bare tap: a first run commits url/version/sha256, a second
       # changes nothing, and no tag means no work.
       - run: |
