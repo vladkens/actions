@@ -305,6 +305,7 @@ jobs:
       - run: |
           mkdir "$RUNNER_TEMP/seed/Casks" "$RUNNER_TEMP/dist"
           printf 'cask "fixture" do\n  version "0.0.1"\n  sha256 "aaaa"\n\n  url "https://x/v#{version}/Fixture-v#{version}-macos-aarch64.dmg"\nend\n' > "$RUNNER_TEMP/seed/Casks/fixture.rb"
+          sed -i "s#https://x#https://github.com/$GITHUB_REPOSITORY/releases/download#" "$RUNNER_TEMP/seed/Casks/fixture.rb"
           git -C "$RUNNER_TEMP/seed" pull --quiet --ff-only "$RUNNER_TEMP/tap.git" main
           git -C "$RUNNER_TEMP/seed" add Casks
           git -C "$RUNNER_TEMP/seed" -c user.name=t -c user.email=t@t commit --quiet -m cask
@@ -322,6 +323,8 @@ jobs:
           sha256sums_aarch64=('bbbb')
           EOF
           printf 'pkgbase = fixture-bin\n\tpkgver = 0.0.1\n\tpkgrel = 2\n\tsource_x86_64 = https://x/v0.0.1/Fixture-v0.0.1-linux-x86_64.deb\n\tsha256sums_x86_64 = aaaa\n\tsource_aarch64 = https://x/v0.0.1/Fixture-v0.0.1-linux-aarch64.deb\n\tsha256sums_aarch64 = bbbb\n\npkgname = fixture-bin\n' > "$RUNNER_TEMP/aur/.SRCINFO"
+          # Like the cask, the package downloads this repo's release files.
+          sed -i "s#https://x#https://github.com/$GITHUB_REPOSITORY/releases/download#" "$RUNNER_TEMP/aur/PKGBUILD" "$RUNNER_TEMP/aur/.SRCINFO"
           git -C "$RUNNER_TEMP/aur" add PKGBUILD .SRCINFO
           git -C "$RUNNER_TEMP/aur" -c user.name=t -c user.email=t@t commit --quiet -m init
           git -C "$RUNNER_TEMP/aur" push --quiet "$RUNNER_TEMP/fixture-bin.git" master
@@ -387,7 +390,7 @@ jobs:
           grep -qx "sha256sums_x86_64=('$(sha linux-x86_64.deb)')" <<< "$pkgbuild"
           grep -qx "sha256sums_aarch64=('$(sha linux-aarch64.deb)')" <<< "$pkgbuild"
           srcinfo=$(git --git-dir="$RUNNER_TEMP/fixture-bin.git" show master:.SRCINFO)
-          grep -qxF "$(printf '\tsource_aarch64 = https://x/v1.2.3/Fixture-v1.2.3-linux-aarch64.deb')" <<< "$srcinfo"
+          grep -qxF "$(printf '\tsource_aarch64 = https://github.com/%s/releases/download/v1.2.3/Fixture-v1.2.3-linux-aarch64.deb' "$GITHUB_REPOSITORY")" <<< "$srcinfo"
           grep -qxF "$(printf '\tsha256sums_x86_64 = %s' "$(sha linux-x86_64.deb)")" <<< "$srcinfo"
           test "$(git --git-dir="$RUNNER_TEMP/fixture-bin.git" log -1 --format='%an | %s')" = "github-actions[bot] | fixture-bin 1.2.3"
 

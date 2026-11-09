@@ -7,10 +7,17 @@ import { clone, commitAndPush, githubAuth, tempPath } from "./git.ts"
 
 export type Archive = { url: string; sha256: string }
 
+// A version goes into a double-quoted Ruby string, where `#{…}` or a quote would be code.
+const checkVersion = (version: string): void => {
+  if (!/^[0-9A-Za-z._+-]+$/.test(version))
+    fail(`version '${version}' can't go into a formula or cask; expected only 0-9 A-Z a-z . _ + -`)
+}
+
 // The formula with its `url`, `sha256` and (when present) `version` set. One download only: a
 // formula with several `url` lines (per-arch `on_arm` / `on_intel` blocks) is refused; those go
 // through bumpFormulaArchives.
 export const bumpFormula = (text: string, version: string, url: string, sha256: string): string => {
+  checkVersion(version)
   const set = (key: string, value: string, required: boolean) => {
     const re = new RegExp(`^(\\s*${key}\\s+)"[^"]*"`, "gm")
     const found = text.match(re)?.length ?? 0
@@ -34,6 +41,7 @@ const archiveKey = (url: string): string => {
 // the archive of the same name, for one download per platform. Archives it doesn't download are
 // skipped; a `url` without an archive is refused, so no platform stays behind.
 export const bumpFormulaArchives = (text: string, version: string, archives: Archive[]): string => {
+  checkVersion(version)
   const urls = text.match(/^\s*url\s+"/gm)?.length ?? 0
   const pairs = /^(\s*url\s+)"([^"]*)"((?:\n\s*version\s+"[^"]*")?\n\s*sha256\s+)"[^"]*"/gm
   if (!urls) fail(`the formula has no 'url "…"' line`)
@@ -56,10 +64,11 @@ export const bumpFormulaFiles = (text: string, version: string, archives: Archiv
 }
 
 // The cask with its `version` and `sha256` set for the release file its `url` downloads: a `url`
-// with `#{version}` names the file once the version is in and stays as it is; a literal one moves
-// to the file of the same name but for the version. One download only: a cask per arch (`arch`,
+// with `#{version}` must be that file's release URL once the version is in, and stays as it is; a
+// literal one moves to the file of the same name but for the version. One download only: a cask per arch (`arch`,
 // `on_arm`, `sha256 arm:`) is refused.
 export const bumpCask = (text: string, version: string, archives: Archive[]): string => {
+  checkVersion(version)
   const line = (key: string) => {
     const re = new RegExp(`^(\\s*${key}\\s+)"([^"]*)"`, "gm")
     const found = [...text.matchAll(re)]
@@ -78,6 +87,8 @@ export const bumpCask = (text: string, version: string, archives: Archive[]): st
     ? archives.find(x => basename(x.url) === basename(expanded))
     : archives.find(x => archiveKey(x.url) === archiveKey(url.value))
   if (!archive) fail(`no file for the cask's url ${expanded}`)
+  if (templated && expanded !== archive.url)
+    fail(`the cask's url is ${expanded}; expected the release file's ${archive.url}`)
 
   const sha256 = line("sha256")
   const versionLine = line("version")

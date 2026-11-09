@@ -24,20 +24,20 @@ A new package manager is one more name in `to` and its inputs. An unknown name f
 
 A formula, `Formula/<name>.rb` or `<name>.rb` in the tap (the repo's name by default), as [homebrew-bump](../homebrew-bump/) does it: one `url` moves to the one file, or each `url` with the `sha256` right after it to the file of the same name but for the version (one download per platform); `version` follows when present.
 
-A cask instead with `homebrew-cask: <name>`, at `Casks/<name>.rb`, for an app's .dmg: its `version` and `sha256` are set for the file its `url` downloads. A `url` with `#{version}` names that file once the version is in and is kept; a literal one moves to the file of the same name. Only single-download casks: one `url` and one `sha256 "…"`.
+A cask instead with `homebrew-cask: <name>`, at `Casks/<name>.rb`, for an app's .dmg: its `version` and `sha256` are set for the file its `url` downloads. A `url` with `#{version}` must be that file's release URL once the version is in, and is kept; a literal one moves to the file of the same name. Only single-download casks: one `url` and one `sha256 "…"`.
 
 ## aur
 
 A `-bin` package that installs the release's .deb per arch. The action clones `ssh://aur@aur.archlinux.org/<aur-package>.git` with the key (written to a temp file with mode 600, removed at the end, never printed; only aur.archlinux.org's published host keys are trusted), and in PKGBUILD and .SRCINFO sets `pkgver` to the tag without its `v`, `pkgrel=1` and each `sha256sums_<arch>` to the checksum of the release's `*-linux-<arch>.deb` (x86_64, aarch64). It commits `<package> <version>` and pushes; a package whose `pkgver` already is the version is left as it is, `pkgrel` included.
 
-The PKGBUILD's per-arch arrays hold one entry each, and its `source_<arch>` URLs use `$pkgver`, so they need no edit:
+The PKGBUILD's per-arch arrays hold one entry each, and each `source_<arch>` is the file's release URL (a `name::` prefix allowed) with the version only as `$pkgver`, so it needs no edit:
 
 ```sh
 source_x86_64=("https://github.com/vladkens/wavo-app/releases/download/v$pkgver/Wavo-v$pkgver-linux-x86_64.deb")
 sha256sums_x86_64=('…')
 ```
 
-makepkg isn't on the runner, so .SRCINFO is edited as text: its sources get the new version and must then end in the file's name, or the step fails. A version with `-` (a pre-release) can't be a pkgver and fails the step.
+makepkg isn't on the runner, so .SRCINFO is edited as text: its sources get the new version, and both files' sources must then be the file's release URL, or the step fails. A pkgver takes only letters, digits, `.`, `_` and `+`, so a pre-release tag (`-`) fails the step.
 
 ## Inputs
 

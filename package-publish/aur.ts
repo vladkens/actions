@@ -15,7 +15,7 @@ const AUR_HOST_KEYS = [
   "aur.archlinux.org ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDKF9vAFWdgm9Bi8uc+tYRBmXASBb5cB5iZsB7LOWWFeBrLp3r14w0/9S2vozjgqY5sJLDPONWoTTaVTbhe3vwO8CBKZTEt1AcWxuXNlRnk9FliR1/eNB9uz/7y1R0+c1Md+P98AJJSJWKN12nqIDIhjl2S1vOUvm7FNY43fU2knIhEbHybhwWeg+0wxpKwcAd/JeL5i92Uv03MYftOToUijd1pqyVFdJvQFhqD4v3M157jxS5FTOBrccAEjT+zYmFyD8WvKUa9vUclRddNllmBJdy4NyLB8SvVZULUPrP3QOlmzemeKracTlVOUG1wsDbxknF1BwSCU7CmU6UFP90kpWIyz66bP0bl67QAvlIc52Yix7pKJPbw85+zykvnfl2mdROsaT8p8R9nwCdFsBc9IiD0NhPEHcyHRwB8fokXTajk2QnGhL+zP5KnkmXnyQYOCUYo3EKMXIlVOVbPDgRYYT/XqvBuzq5S9rrU70KoI/S5lDnFfx/+lPLdtcnnEPk=",
 ]
 
-type File = { name: string; readonly sha256: string }
+type File = { name: string; url: string; readonly sha256: string }
 export type Package = { pkgbuild: string; srcinfo: string }
 
 // PKGBUILD's top-level `key=value`, unquoted.
@@ -46,13 +46,18 @@ const field = (text: string, key: string) => {
   return { re, value: found[0][2] }
 }
 
+// A source's URL without its `name::` prefix.
+const withoutName = (source: string): string => {
+  return source.includes("::") ? source.slice(source.indexOf("::") + 2) : source
+}
+
 // The package at `version` with pkgrel 1 and, for each arch with a `sha256sums_<arch>`, the
-// checksum of the release's `*-linux-<arch>.deb`. Sources must use $pkgver, so they need no edit
-// in PKGBUILD; in .SRCINFO, which has them expanded, the old version is replaced and the result
-// must end in the file's name. A package already at `version` comes back as it is.
+// checksum of the release's `*-linux-<arch>.deb`. Sources must be that file's release URL with the
+// version as $pkgver, so they need no edit in PKGBUILD; in .SRCINFO, which has them expanded, the
+// old version is replaced, and both must then be the file's URL. A package already at `version` comes back as it is.
 export const bumpAur = (pkg: Package, version: string, files: File[]): Package => {
-  if (/[\s/:-]/.test(version))
-    fail(`version ${version} can't be a pkgver; expected no '-', ':', '/' or spaces`)
+  if (!/^[0-9A-Za-z._+]+$/.test(version))
+    fail(`version '${version}' can't be a pkgver; expected only 0-9 A-Z a-z . _ +`)
   const old = scalar(pkg.pkgbuild, "pkgver").value
   if (old === version) return pkg
 
@@ -69,21 +74,23 @@ export const bumpAur = (pkg: Package, version: string, files: File[]): Package =
     .replace(srcVersion.re, (_, key: string) => `${key}${version}`)
     .replace(field(pkg.srcinfo, "pkgrel").re, (_, key: string) => `${key}1`)
   for (const arch of arches) {
-    const source = array(pkg.pkgbuild, `source_${arch}`)
-    if (!/\$pkgver\b|\$\{pkgver\}/.test(source.value))
-      fail(
-        `PKGBUILD's source_${arch} ${source.value} has no $pkgver; expected the version as $pkgver`,
-      )
     const matches = files.filter(x => x.name.endsWith(`-linux-${arch}.deb`))
     if (matches.length !== 1) {
       const found = matches.map(x => x.name).join(", ") || "none"
       fail(`expected one release file *-linux-${arch}.deb for the AUR, found ${found}`)
     }
 
+    // Both sources, with the new version in, must download that file: `name::` and all else kept.
     const file = matches[0]
+    const source = array(pkg.pkgbuild, `source_${arch}`).value
+    const expanded = source.replace(/\$\{pkgver\}|\$pkgver\b/g, () => version)
+    if (withoutName(expanded) !== file.url)
+      fail(
+        `PKGBUILD's source_${arch} ${source} is ${expanded} at ${version}; expected ${file.url}, with the version only as $pkgver`,
+      )
     const url = field(pkg.srcinfo, `source_${arch}`).value.replaceAll(old, version)
-    if (!url.endsWith(`/${file.name}`))
-      fail(`.SRCINFO's source_${arch} would be ${url}; expected it to end in /${file.name}`)
+    if (withoutName(url) !== file.url)
+      fail(`.SRCINFO's source_${arch} would be ${url}; expected ${file.url}`)
     const sums = array(pkg.pkgbuild, `sha256sums_${arch}`)
     pkgbuild = pkgbuild.replace(
       sums.re,

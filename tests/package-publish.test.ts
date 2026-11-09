@@ -27,8 +27,8 @@ arch=('x86_64' 'aarch64')
 url="https://github.com/vladkens/wavo-app"
 license=('MIT')
 depends=('alsa-lib')
-source_x86_64=("$url/releases/download/v$pkgver/Wavo-v\${pkgver}-linux-x86_64.deb")
-source_aarch64=("$url/releases/download/v$pkgver/Wavo-v\${pkgver}-linux-aarch64.deb")
+source_x86_64=("https://github.com/vladkens/wavo-app/releases/download/v$pkgver/Wavo-v\${pkgver}-linux-x86_64.deb")
+source_aarch64=("wavo.deb::https://github.com/vladkens/wavo-app/releases/download/v$pkgver/Wavo-v\${pkgver}-linux-aarch64.deb")
 sha256sums_x86_64=('aaaa')
 sha256sums_aarch64=(
   'bbbb'
@@ -50,17 +50,19 @@ const srcinfo = `pkgbase = wavo-app-bin
 \tdepends = alsa-lib
 \tsource_x86_64 = https://github.com/vladkens/wavo-app/releases/download/v0.4.0/Wavo-v0.4.0-linux-x86_64.deb
 \tsha256sums_x86_64 = aaaa
-\tsource_aarch64 = https://github.com/vladkens/wavo-app/releases/download/v0.4.0/Wavo-v0.4.0-linux-aarch64.deb
+\tsource_aarch64 = wavo.deb::https://github.com/vladkens/wavo-app/releases/download/v0.4.0/Wavo-v0.4.0-linux-aarch64.deb
 \tsha256sums_aarch64 = bbbb
 
 pkgname = wavo-app-bin
 `
 
+const release = "https://github.com/vladkens/wavo-app/releases/download/v1.0.0"
+const file = (name: string, sha256: string) => ({ name, url: `${release}/${name}`, sha256 })
 const files = [
-  { name: "Wavo-v1.0.0-linux-aarch64.deb", sha256: "2222" },
-  { name: "Wavo-v1.0.0-linux-x86_64.AppImage", sha256: "9999" },
-  { name: "Wavo-v1.0.0-linux-x86_64.deb", sha256: "1111" },
-  { name: "Wavo-v1.0.0-macos-aarch64.dmg", sha256: "8888" },
+  file("Wavo-v1.0.0-linux-aarch64.deb", "2222"),
+  file("Wavo-v1.0.0-linux-x86_64.AppImage", "9999"),
+  file("Wavo-v1.0.0-linux-x86_64.deb", "1111"),
+  file("Wavo-v1.0.0-macos-aarch64.dmg", "8888"),
 ]
 
 test("aur: pkgver, pkgrel and each arch's checksum set in PKGBUILD and .SRCINFO", () => {
@@ -84,6 +86,7 @@ test("aur: a package already at the version is left alone, files untouched", () 
   const untouchable = [
     {
       name: "x-linux-x86_64.deb",
+      url: "x",
       get sha256(): string {
         throw new Error("downloaded on a re-run")
       },
@@ -92,19 +95,31 @@ test("aur: a package already at the version is left alone, files untouched", () 
   assert.equal(bumpAur(out, "1.0.0", untouchable), out)
 })
 
-test("aur: sources without $pkgver, missing files and bad versions are refused", () => {
-  const fixed = pkgbuild.replace(
-    "v$pkgver/Wavo-v${pkgver}-linux-x86_64",
-    "v0.4.0/Wavo-v0.4.0-linux-x86_64",
+test("aur: a source that isn't the release file at the new version is refused", () => {
+  const fixed = pkgbuild.replace("Wavo-v${pkgver}-linux-x86_64", "Wavo-v0.4.0-linux-x86_64")
+  assert.throws(
+    () => bumpAur({ pkgbuild: fixed, srcinfo }, "1.0.0", files),
+    /version only as \$pkgver/,
   )
-  assert.throws(() => bumpAur({ pkgbuild: fixed, srcinfo }, "1.0.0", files), /has no \$pkgver/)
+  const elsewhere = pkgbuild.replaceAll("github.com/vladkens", "example.com/vladkens")
+  assert.throws(
+    () => bumpAur({ pkgbuild: elsewhere, srcinfo }, "1.0.0", files),
+    /PKGBUILD's source/,
+  )
+})
+
+test("aur: a version that isn't a plain pkgver is refused", () => {
+  assert.throws(() => bumpAur({ pkgbuild, srcinfo }, "$(id)", files), /can't be a pkgver/)
+  assert.throws(() => bumpAur({ pkgbuild, srcinfo }, "1.0.0-rc.1", files), /can't be a pkgver/)
+})
+
+test("aur: missing files and broken packages are refused", () => {
   assert.throws(
     () => bumpAur({ pkgbuild, srcinfo }, "1.0.0", files.slice(1)),
     /one release file \*-linux-aarch64\.deb for the AUR, found none/,
   )
-  const renamed = files.map(x => ({ ...x, name: x.name.replace("Wavo", "wavo") }))
-  assert.throws(() => bumpAur({ pkgbuild, srcinfo }, "1.0.0", renamed), /expected it to end in/)
-  assert.throws(() => bumpAur({ pkgbuild, srcinfo }, "1.0.0-rc.1", files), /can't be a pkgver/)
+  const renamed = files.map(x => file(x.name.replace("Wavo", "wavo"), x.sha256))
+  assert.throws(() => bumpAur({ pkgbuild, srcinfo }, "1.0.0", renamed), /PKGBUILD's source/)
   const stale = srcinfo.replace("pkgver = 0.4.0", "pkgver = 0.3.0")
   assert.throws(() => bumpAur({ pkgbuild, srcinfo: stale }, "1.0.0", files), /differs from/)
   const two = pkgbuild.replace("('aaaa')", "('aaaa' 'cccc')")
@@ -125,10 +140,7 @@ const cask = `cask "wavo-app" do
 end
 `
 
-const archives = [
-  { url: "https://gh/v1.0.0/Wavo-v1.0.0-linux-x86_64.deb", sha256: "1111" },
-  { url: "https://gh/v1.0.0/Wavo-v1.0.0-macos-aarch64.dmg", sha256: "8888" },
-]
+const archives = [files[2], files[3]]
 
 test("cask: version and sha256 set, a url with #{version} kept", () => {
   const out = bumpCask(cask, "1.0.0", archives)
@@ -160,4 +172,14 @@ test("cask: a missing file, a second sha256 or other interpolation is refused", 
 
 test("formula: no release files is refused", () => {
   assert.throws(() => bumpFormulaFiles(cask, "1.0.0", []), /no release files/)
+})
+
+test("cask: a url with #{version} that isn't the release file's is refused", () => {
+  const elsewhere = cask.replace("github.com/vladkens", "example.com/vladkens")
+  assert.throws(() => bumpCask(elsewhere, "1.0.0", archives), /expected the release file's/)
+})
+
+test("homebrew: a version with Ruby syntax is refused", () => {
+  assert.throws(() => bumpCask(cask, "1.0.0#{`id`}", archives), /can't go into a formula or cask/)
+  assert.throws(() => bumpFormulaFiles(cask, '1"', archives), /can't go into a formula or cask/)
 })
