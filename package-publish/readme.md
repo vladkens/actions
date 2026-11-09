@@ -28,7 +28,7 @@ A cask instead with `homebrew-cask: <name>`, at `Casks/<name>.rb`, for an app's 
 
 ## aur
 
-A `-bin` package that installs the release's .deb per arch. The action clones `ssh://aur@aur.archlinux.org/<aur-package>.git` with the key (written to a temp file with mode 600, removed at the end, never printed; the host key is accepted on first use), and in PKGBUILD and .SRCINFO sets `pkgver` to the tag without its `v`, `pkgrel=1` and each `sha256sums_<arch>` to the checksum of the release's `*-linux-<arch>.deb` (x86_64, aarch64). It commits `<package> <version>` and pushes; a package whose `pkgver` already is the version is left as it is, `pkgrel` included.
+A `-bin` package that installs the release's .deb per arch. The action clones `ssh://aur@aur.archlinux.org/<aur-package>.git` with the key (written to a temp file with mode 600, removed at the end, never printed; only aur.archlinux.org's published host keys are trusted), and in PKGBUILD and .SRCINFO sets `pkgver` to the tag without its `v`, `pkgrel=1` and each `sha256sums_<arch>` to the checksum of the release's `*-linux-<arch>.deb` (x86_64, aarch64). It commits `<package> <version>` and pushes; a package whose `pkgver` already is the version is left as it is, `pkgrel` included.
 
 The PKGBUILD's per-arch arrays hold one entry each, and its `source_<arch>` URLs use `$pkgver`, so they need no edit:
 

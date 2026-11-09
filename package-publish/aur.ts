@@ -6,6 +6,15 @@ import { basename, join } from "node:path"
 import { fail } from "../lib/core.ts"
 import { clone, commitAndPush, tempPath } from "../lib/git.ts"
 
+// aur.archlinux.org's host keys from ssh-keyscan, each one's SHA256 fingerprint matching the list
+// on https://aur.archlinux.org (checked 2026-11-09): Ed25519 RFzBCUItH9LZS0cKB5UE6ceAYhBD5C8GeOBip8Z11+4,
+// ECDSA uTa/0PndEgPZTf76e1DFqXKJEXKsn7m9ivhLQtzGOCI, RSA 5s5cIyReIfNNVGRFdDbe3hdYiI5OelHGpw2rOUud3Q8.
+const AUR_HOST_KEYS = [
+  "aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN",
+  "aur.archlinux.org ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBLMiLrP8pVi5BFX2i3vepSUnpedeiewE5XptnUnau+ZoeUOPkpoCgZZuYfpaIQfhhJJI5qgnjJmr4hyJbe/zxow=",
+  "aur.archlinux.org ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDKF9vAFWdgm9Bi8uc+tYRBmXASBb5cB5iZsB7LOWWFeBrLp3r14w0/9S2vozjgqY5sJLDPONWoTTaVTbhe3vwO8CBKZTEt1AcWxuXNlRnk9FliR1/eNB9uz/7y1R0+c1Md+P98AJJSJWKN12nqIDIhjl2S1vOUvm7FNY43fU2knIhEbHybhwWeg+0wxpKwcAd/JeL5i92Uv03MYftOToUijd1pqyVFdJvQFhqD4v3M157jxS5FTOBrccAEjT+zYmFyD8WvKUa9vUclRddNllmBJdy4NyLB8SvVZULUPrP3QOlmzemeKracTlVOUG1wsDbxknF1BwSCU7CmU6UFP90kpWIyz66bP0bl67QAvlIc52Yix7pKJPbw85+zykvnfl2mdROsaT8p8R9nwCdFsBc9IiD0NhPEHcyHRwB8fokXTajk2QnGhL+zP5KnkmXnyQYOCUYo3EKMXIlVOVbPDgRYYT/XqvBuzq5S9rrU70KoI/S5lDnFfx/+lPLdtcnnEPk=",
+]
+
 type File = { name: string; readonly sha256: string }
 export type Package = { pkgbuild: string; srcinfo: string }
 
@@ -90,7 +99,8 @@ export const bumpAur = (pkg: Package, version: string, files: File[]): Package =
 
 // Clones the AUR package (a name, or any git URL: a local one in tests) over ssh with the key,
 // bumps it and pushes `<package> <version>`; true when it changed. The key goes to a 600 file in a
-// 700 temp dir, removed at the end, and reaches ssh only through GIT_SSH_COMMAND's env.
+// 700 temp dir, removed at the end, and reaches ssh only through GIT_SSH_COMMAND's env; ssh trusts
+// only AUR_HOST_KEYS. A local URL doesn't use ssh, so the pin doesn't get in its way.
 export const publishAur = (pkg: string, key: string, tag: string, files: File[]): boolean => {
   const version = tag.replace(/^v/, "")
   const remote = /^[a-z0-9@._+-]+$/.test(pkg) ? `ssh://aur@aur.archlinux.org/${pkg}.git` : pkg
@@ -100,9 +110,11 @@ export const publishAur = (pkg: string, key: string, tag: string, files: File[])
   try {
     const keyFile = join(keyDir, "key")
     writeFileSync(keyFile, `${key.replace(/\r\n/g, "\n")}\n`, { mode: 0o600 })
+    const knownHosts = join(keyDir, "known_hosts")
+    writeFileSync(knownHosts, `${AUR_HOST_KEYS.join("\n")}\n`)
     const ssh = [
-      `ssh -i '${keyFile}' -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new`,
-      `-o UserKnownHostsFile='${join(keyDir, "known_hosts")}'`,
+      `ssh -i '${keyFile}' -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes`,
+      `-o UserKnownHostsFile='${knownHosts}'`,
     ]
     const env = { GIT_SSH_COMMAND: ssh.join(" "), GIT_TERMINAL_PROMPT: "0" }
     const dir = tempPath("aur")
