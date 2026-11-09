@@ -1,0 +1,41 @@
+name: package-publish
+description: Publishes a release to package managers (Homebrew, AUR) by bumping the repos that hold their packages; does nothing without a tag.
+inputs:
+  tag:
+    description: The released tag, e.g. rust-publish's `tag` output; empty means no release, nothing to do.
+    default: ""
+  files:
+    description: The release's files, globs one per line (rust-publish's `files` output); when empty, the tag's release assets, downloaded when needed.
+    default: ""
+  to:
+    description: The package managers to publish to, separated by commas, spaces or newlines; `homebrew`, `aur`.
+    required: true
+  token:
+    description: Reads the release's assets when `files` is empty.
+    default: ${{ github.token }}
+  homebrew-tap:
+    description: The tap, `owner/repo` on GitHub (e.g. vladkens/homebrew-tap), or any git URL (a local one in tests).
+    default: ""
+  homebrew-token:
+    description: A token that can push to the tap (a secret; GITHUB_TOKEN can't reach another repo).
+    default: ""
+  homebrew-formula:
+    description: The formula's name, at `Formula/<name>.rb` or `<name>.rb` in the tap; the repo's name when empty.
+    default: ""
+  homebrew-cask:
+    description: A cask's name, at `Casks/<name>.rb` in the tap, bumped instead of a formula.
+    default: ""
+  aur-package:
+    description: The AUR package (e.g. wavo-app-bin), created by hand once; or any git URL (a local one in tests).
+    default: ""
+  aur-ssh-key:
+    description: The private ssh key of the AUR account that maintains the package (a secret).
+    default: ""
+outputs:
+  changed:
+    description: "`true` when any package was updated and pushed."
+  updated:
+    description: The package managers updated, space-separated (e.g. `homebrew aur`); empty when none.
+runs:
+  using: node24
+  main: index.ts

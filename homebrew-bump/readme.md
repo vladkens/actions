@@ -2,6 +2,8 @@
 
 Points a Homebrew formula in a tap at a release's archives: sets its `url`, `sha256` and `version` and pushes the change as github-actions[bot]; without a tag it does nothing. It gets a token that pushes to the tap and runs no project code.
 
+[package-publish](../package-publish/) supersedes it: the same formula bump as `to: homebrew`, plus casks and the AUR in one step. homebrew-bump keeps working for the repos that use it.
+
 A step in the `publish` job after [rust-publish](../rust-publish/), whose step has `id: release`:
 
 ```yaml

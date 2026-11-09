@@ -10,13 +10,14 @@ Shared release steps for vladkens' repos, as GitHub Actions used like `vladkens/
 | [rust-publish](rust-publish/) | Publishes rust-build's files: the rolling dev pre-release, or crates.io, the tag and the GitHub release | Gets the write token and OIDC; never compiles, runs only the repo's `pack` command |
 | [py-build](py-build/) | Checks a release PR, builds the sdist and wheel with uv and uploads them for py-publish | Runs the project's build backend; gets no secrets and no write token |
 | [py-publish](py-publish/) | On a release commit checks py-build's files and creates the tag and GitHub release for the PyPI upload after it | Gets the write token; never builds or runs project code |
-| [homebrew-bump](homebrew-bump/) | Points a tap's formula at the release's archive; does nothing without a release | Gets a token that pushes to the tap; runs no project code |
+| [package-publish](package-publish/) | Publishes a release to the package managers listed in `to` (a Homebrew formula or cask, the AUR); does nothing without a release | Gets the tokens and keys that push the packages; runs no project code |
+| [homebrew-bump](homebrew-bump/) | Points a tap's formula at the release's archive; superseded by package-publish | Gets a token that pushes to the tap; runs no project code |
 
 Each one's readme has its usage, inputs and outputs. The JavaScript actions run on the runner's Node 24 and need `gh` and `git`, preinstalled on GitHub-hosted runners.
 
 ## Building blocks
 
-The actions above call these. They are useful on their own, but repos normally use the five above.
+The actions above call these. They are useful on their own, but repos normally use the ones above.
 
 | Action | What it does | Trust |
 | --- | --- | --- |
@@ -74,7 +75,7 @@ jobs:
 ```
 
 - A release publishes the crate and the files renamed from `<name>-dev` to `<name>-vX.Y.Z`; the targets, the dev pre-release, crates.io and `pack` (the final release files, made in `publish`) are inputs of [rust-build](rust-build/) and [rust-publish](rust-publish/).
-- A Homebrew formula follows a release with [homebrew-bump](homebrew-bump/) as one more step in `publish`.
+- Package managers (a Homebrew formula or cask, the AUR) follow a release with [package-publish](package-publish/) as one more step in `publish`.
 
 ## A Python repo
 

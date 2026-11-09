@@ -6,7 +6,7 @@ An action's inputs and outputs are in its `action.yml`, its usage in the top `re
 
 ## Boundaries
 
-- Generalize only what the repos share: test jobs, build commands, asset sets, Docker, Homebrew and store uploads stay in each repo.
+- Generalize only what the repos share, such as bumping a package manager's file in the person's own repo (a Homebrew tap, an AUR package); test jobs, build commands, asset sets, Docker, store uploads and the rest stay in each repo.
 - Releases start from a squash-merged `release: vX.Y.Z (#N)` commit on `main`, and its tag is always created by these actions in CI; no tag-push trigger.
 - Move the `v1` tag only with the person's approval: every repo using `@v1` picks it up at once.
 - Changes land on `main` through a PR; never push to `main` directly.

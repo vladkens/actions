@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 
-import { bumpFormula, bumpFormulaArchives } from "../homebrew-bump/formula.ts"
+import { bumpFormula, bumpFormulaArchives } from "../lib/homebrew.ts"
 
 const formula = `class Macmon < Formula
   desc "Sudoless performance monitoring for Apple Silicon"
