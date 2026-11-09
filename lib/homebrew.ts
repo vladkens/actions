@@ -13,6 +13,14 @@ const checkVersion = (version: string): void => {
     fail(`version '${version}' can't go into a formula or cask; expected only 0-9 A-Z a-z . _ + -`)
 }
 
+// The same for a release file's name, the end of the URL written for it.
+const checkName = (url: string): void => {
+  if (!/^[A-Za-z0-9._+-]+$/.test(basename(url)))
+    fail(
+      `file name '${basename(url)}' can't go into a formula or cask; expected only A-Z a-z 0-9 . _ + -`,
+    )
+}
+
 // The formula with its `url`, `sha256` and (when present) `version` set. One download only: a
 // formula with several `url` lines (per-arch `on_arm` / `on_intel` blocks) is refused; those go
 // through bumpFormulaArchives.
@@ -26,6 +34,7 @@ export const bumpFormula = (text: string, version: string, url: string, sha256: 
     if (!found && required) fail(`the formula has no '${key} "…"' line`)
     text = text.replace(re, `$1"${value}"`)
   }
+  checkName(url)
   set("url", url, true)
   set("sha256", sha256, true)
   set("version", version, false)
@@ -50,6 +59,7 @@ export const bumpFormulaArchives = (text: string, version: string, archives: Arc
     .replace(pairs, (_, url: string, old: string, sha256: string) => {
       const archive = archives.find(x => archiveKey(x.url) === archiveKey(old))
       if (!archive) fail(`no file for the formula's url ${old}`)
+      checkName(archive.url)
       return `${url}"${archive.url}"${sha256}"${archive.sha256}"`
     })
     .replace(/^(\s*version\s+)"[^"]*"/gm, `$1"${version}"`)
@@ -87,6 +97,7 @@ export const bumpCask = (text: string, version: string, archives: Archive[]): st
     ? archives.find(x => basename(x.url) === basename(expanded))
     : archives.find(x => archiveKey(x.url) === archiveKey(url.value))
   if (!archive) fail(`no file for the cask's url ${expanded}`)
+  checkName(archive.url)
   if (templated && expanded !== archive.url)
     fail(`the cask's url is ${expanded}; expected the release file's ${archive.url}`)
 

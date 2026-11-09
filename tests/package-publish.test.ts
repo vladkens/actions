@@ -183,3 +183,17 @@ test("homebrew: a version with Ruby syntax is refused", () => {
   assert.throws(() => bumpCask(cask, "1.0.0#{`id`}", archives), /can't go into a formula or cask/)
   assert.throws(() => bumpFormulaFiles(cask, '1"', archives), /can't go into a formula or cask/)
 })
+
+test("aur: a single-quoted source with $pkgver is refused", () => {
+  const single = pkgbuild.replace(/^source_x86_64=\("(.*)"\)$/m, "source_x86_64=('$1')")
+  assert.notEqual(single, pkgbuild)
+  assert.throws(() => bumpAur({ pkgbuild: single, srcinfo }, "1.0.0", files), /single-quoted/)
+})
+
+test("homebrew: a file name with Ruby syntax is refused", () => {
+  const evil = { url: `${release}/Wavo-v1.0.0-#{\`id\`}.dmg`, sha256: "1" }
+  const literal = cask.replaceAll("#{version}", "0.4.0")
+  assert.throws(() => bumpFormulaFiles(literal, "1.0.0", [evil]), /file name .* can't go into/)
+  const quoted = { url: `${release}/Wavo-v1.0.0-macos-aarch64.dmg"`, sha256: "1" }
+  assert.throws(() => bumpFormulaFiles(literal, "1.0.0", [quoted]), /file name .* can't go into/)
+})

@@ -82,7 +82,9 @@ export const bumpAur = (pkg: Package, version: string, files: File[]): Package =
 
     // Both sources, with the new version in, must download that file: `name::` and all else kept.
     const file = matches[0]
-    const source = array(pkg.pkgbuild, `source_${arch}`).value
+    const { value: source, quote } = array(pkg.pkgbuild, `source_${arch}`)
+    if (quote === "'" && source.includes("$"))
+      fail(`PKGBUILD's source_${arch} is single-quoted, so $pkgver stays as it is; expected "…"`)
     const expanded = source.replace(/\$\{pkgver\}|\$pkgver\b/g, () => version)
     if (withoutName(expanded) !== file.url)
       fail(
