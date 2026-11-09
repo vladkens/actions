@@ -299,6 +299,98 @@ jobs:
           grep -qx "  sha256 \"$(sha256sum "$RUNNER_TEMP/fixture-v1.2.3.tar.gz" | cut -d' ' -f1)\"" <<< "$formula"
           test "$(git --git-dir="$RUNNER_TEMP/tap.git" log -1 --format='%an | %s')" = "github-actions[bot] | fixture v1.2.3"
 
+      # package-publish against the same tap, now with a cask, and a local bare AUR package: a
+      # first run bumps both, a second changes nothing, no tag means no work, an unknown manager
+      # fails.
+      - run: |
+          mkdir "$RUNNER_TEMP/seed/Casks" "$RUNNER_TEMP/dist"
+          printf 'cask "fixture" do\n  version "0.0.1"\n  sha256 "aaaa"\n\n  url "https://x/v#{version}/Fixture-v#{version}-macos-aarch64.dmg"\nend\n' > "$RUNNER_TEMP/seed/Casks/fixture.rb"
+          git -C "$RUNNER_TEMP/seed" pull --quiet --ff-only "$RUNNER_TEMP/tap.git" main
+          git -C "$RUNNER_TEMP/seed" add Casks
+          git -C "$RUNNER_TEMP/seed" -c user.name=t -c user.email=t@t commit --quiet -m cask
+          git -C "$RUNNER_TEMP/seed" push --quiet "$RUNNER_TEMP/tap.git" main
+          git init --quiet --bare -b master "$RUNNER_TEMP/fixture-bin.git"
+          git init --quiet -b master "$RUNNER_TEMP/aur"
+          cat > "$RUNNER_TEMP/aur/PKGBUILD" << 'EOF'
+          pkgname=fixture-bin
+          pkgver=0.0.1
+          pkgrel=2
+          arch=('x86_64' 'aarch64')
+          source_x86_64=("https://x/v$pkgver/Fixture-v${pkgver}-linux-x86_64.deb")
+          source_aarch64=("https://x/v$pkgver/Fixture-v${pkgver}-linux-aarch64.deb")
+          sha256sums_x86_64=('aaaa')
+          sha256sums_aarch64=('bbbb')
+          EOF
+          printf 'pkgbase = fixture-bin\n\tpkgver = 0.0.1\n\tpkgrel = 2\n\tsource_x86_64 = https://x/v0.0.1/Fixture-v0.0.1-linux-x86_64.deb\n\tsha256sums_x86_64 = aaaa\n\tsource_aarch64 = https://x/v0.0.1/Fixture-v0.0.1-linux-aarch64.deb\n\tsha256sums_aarch64 = bbbb\n\npkgname = fixture-bin\n' > "$RUNNER_TEMP/aur/.SRCINFO"
+          git -C "$RUNNER_TEMP/aur" add PKGBUILD .SRCINFO
+          git -C "$RUNNER_TEMP/aur" -c user.name=t -c user.email=t@t commit --quiet -m init
+          git -C "$RUNNER_TEMP/aur" push --quiet "$RUNNER_TEMP/fixture-bin.git" master
+          for f in macos-aarch64.dmg linux-x86_64.deb linux-aarch64.deb; do
+            echo "$f" > "$RUNNER_TEMP/dist/Fixture-v1.2.3-$f"
+          done
+      - id: pkg-none
+        name: package-publish (no tag)
+        uses: ./package-publish
+        with:
+          to: homebrew, aur
+      - id: pkg-first
+        name: package-publish (first)
+        uses: ./package-publish
+        with:
+          tag: v1.2.3
+          files: ${{ runner.temp }}/dist/*
+          to: |
+            homebrew
+            aur
+          homebrew-tap: file://${{ runner.temp }}/tap.git
+          homebrew-token: unused
+          homebrew-cask: fixture
+          aur-package: file://${{ runner.temp }}/fixture-bin.git
+          aur-ssh-key: unused
+      - id: pkg-again
+        name: package-publish (again)
+        uses: ./package-publish
+        with:
+          tag: v1.2.3
+          files: ${{ runner.temp }}/dist/*
+          to: |
+            homebrew
+            aur
+          homebrew-tap: file://${{ runner.temp }}/tap.git
+          homebrew-token: unused
+          homebrew-cask: fixture
+          aur-package: file://${{ runner.temp }}/fixture-bin.git
+          aur-ssh-key: unused
+      - id: pkg-unknown
+        name: package-publish (unknown manager)
+        continue-on-error: true
+        env:
+          EXPECT_FAILURE: "1"
+        uses: ./package-publish
+        with:
+          to: homebrew, brew
+      - env:
+          CHANGED: ${{ steps.pkg-none.outputs.changed }} ${{ steps.pkg-first.outputs.changed }} ${{ steps.pkg-again.outputs.changed }}
+          UPDATED: ${{ steps.pkg-first.outputs.updated }}
+          OUTCOME: ${{ steps.pkg-unknown.outcome }}
+        run: |
+          test "$CHANGED" = "false true false"
+          test "$UPDATED" = "homebrew aur"
+          test "$OUTCOME" = failure
+          sha() { sha256sum "$RUNNER_TEMP/dist/Fixture-v1.2.3-$1" | cut -d' ' -f1; }
+          cask=$(git --git-dir="$RUNNER_TEMP/tap.git" show main:Casks/fixture.rb)
+          grep -qx '  version "1.2.3"' <<< "$cask"
+          grep -qx "  sha256 \"$(sha macos-aarch64.dmg)\"" <<< "$cask"
+          pkgbuild=$(git --git-dir="$RUNNER_TEMP/fixture-bin.git" show master:PKGBUILD)
+          grep -qx 'pkgver=1.2.3' <<< "$pkgbuild"
+          grep -qx 'pkgrel=1' <<< "$pkgbuild"
+          grep -qx "sha256sums_x86_64=('$(sha linux-x86_64.deb)')" <<< "$pkgbuild"
+          grep -qx "sha256sums_aarch64=('$(sha linux-aarch64.deb)')" <<< "$pkgbuild"
+          srcinfo=$(git --git-dir="$RUNNER_TEMP/fixture-bin.git" show master:.SRCINFO)
+          grep -qxF "$(printf '\tsource_aarch64 = https://x/v1.2.3/Fixture-v1.2.3-linux-aarch64.deb')" <<< "$srcinfo"
+          grep -qxF "$(printf '\tsha256sums_x86_64 = %s' "$(sha linux-x86_64.deb)")" <<< "$srcinfo"
+          test "$(git --git-dir="$RUNNER_TEMP/fixture-bin.git" log -1 --format='%an | %s')" = "github-actions[bot] | fixture-bin 1.2.3"
+
   # macOS, where real repos run rust-build: release-check once, which also proves the runner runs
   # `main: index.ts` there, and rust-dist on a real binary crate, Apple natively and Linux through
   # cargo-cross.
