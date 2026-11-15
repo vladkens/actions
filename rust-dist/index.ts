@@ -49,8 +49,9 @@ await main(() => {
   // Both come from PyPI, every wheel pinned by hash in zigbuild.txt.
   if (other.length) {
     const venv = join(process.env.RUNNER_TEMP || tmpdir(), "rust-dist-zig")
+    const bin = join(venv, "bin")
     run("python3", ["-m", "venv", venv])
-    run(join(venv, "bin/pip"), [
+    run(join(bin, "pip"), [
       "install",
       "--quiet",
       "--disable-pip-version-check",
@@ -64,12 +65,14 @@ await main(() => {
 
     // `<target>.2.28` links against glibc 2.28; the build still goes to target/<target>.
     const zigTargets = other.map(t => (t.includes("-linux-gnu") ? `${t}.2.28` : t))
+    // The venv's cargo-zigbuild and zig, not others in ~/.cargo/bin or PATH: `cargo zigbuild`
+    // would look there first.
     run(
-      "cargo",
+      join(bin, "cargo-zigbuild"),
       ["zigbuild", "--profile", profile, "--locked", ...zigTargets.flatMap(t => ["--target", t])],
       {
         env: {
-          PATH: `${join(venv, "bin")}:${process.env.PATH}`,
+          CARGO_ZIGBUILD_ZIG_PATH: join(bin, "python-zig"),
           // rust-build caches it
           ZIG_GLOBAL_CACHE_DIR: process.env.ZIG_GLOBAL_CACHE_DIR || join(homedir(), ".cache/zig"),
         },
