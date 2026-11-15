@@ -27,10 +27,14 @@ export const profileDir = (profile: string): string => {
 
 type PypiFile = { upload_time_iso_8601: string; yanked: boolean }
 
-// Final releases, newest first, whose files were all uploaded before `before` and none is yanked:
-// a wheel added later to an old release makes it new again.
+// Final releases (post-releases too), newest first, whose files were all uploaded before `before`
+// and none is yanked: a wheel added later to an old release makes it new again.
 export const settledVersions = (releases: Record<string, PypiFile[]>, before: number): string[] => {
-  const parts = (v: string) => v.split(".").map(Number)
+  // "0.17.0.post1" -> [0, 17, 0, 1]; without a post-release -1, so it comes before ".post0"
+  const parts = (v: string) => {
+    const [base, post] = v.split(".post")
+    return [...base.split(".").map(Number), post === undefined ? -1 : Number(post)]
+  }
   const newer = (a: string, b: string) => {
     const [x, y] = [parts(a), parts(b)]
     for (let i = 0; i < Math.max(x.length, y.length); i++) {
@@ -39,7 +43,7 @@ export const settledVersions = (releases: Record<string, PypiFile[]>, before: nu
     return 0
   }
   return Object.entries(releases)
-    .filter(([v, files]) => /^\d+(\.\d+)*$/.test(v) && files.length > 0)
+    .filter(([v, files]) => /^\d+(\.\d+)*(\.post\d+)?$/.test(v) && files.length > 0)
     .filter(([, files]) =>
       files.every(f => !f.yanked && Date.parse(f.upload_time_iso_8601) < before),
     )
