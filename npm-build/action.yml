@@ -1,0 +1,89 @@
+name: npm-build
+description: The read-only half of an npm release. Checks a release PR, installs with npm or pnpm, runs the build script, packs the package and uploads the tarball for npm-publish.
+inputs:
+  working-directory:
+    description: The directory with package.json and its lockfile, package-lock.json or pnpm-lock.yaml.
+    default: .
+  node-version:
+    description: The Node.js version to build with.
+    default: "24"
+  artifact:
+    description: The artifact name npm-publish downloads.
+    default: release
+outputs:
+  tarball:
+    description: The packed tarball's path.
+    value: ${{ steps.pack.outputs.tarball }}
+runs:
+  using: composite
+  steps:
+    # Install and build scripts run in this job: it must not be able to publish anything.
+    - name: Check the job is read-only
+      shell: bash
+      run: |
+        if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+          msg="npm-build runs the project's scripts: give its job no 'id-token: write' (and no write permissions)"
+          # test.yml's negative case: a plain line, no annotation.
+          if [ -n "${EXPECT_FAILURE:-}" ]; then echo "expected failure: $msg"; else echo "::error::$msg"; fi
+
+          exit 1
+        fi
+
+    # A release PR is checked before its merge, ahead of the scripts: read-only, the job's token
+    # reads the tags. The release commit is checked by npm-publish.
+    - if: "github.event_name == 'pull_request' && startsWith(github.event.pull_request.title, 'release: v')"
+      uses: $/release-check
+      with:
+        manifest: ${{ inputs.working-directory }}/package.json
+        changelog: ${{ inputs.working-directory }}/changelog.md
+
+    # The lockfile picks the package manager; pnpm's version comes from `packageManager`.
+    - id: pm
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        if [ -f pnpm-lock.yaml ]; then pm=pnpm; elif [ -f package-lock.json ]; then pm=npm; else
+          echo "::error::no lockfile in '$PWD': expected package-lock.json or pnpm-lock.yaml"
+          exit 1
+        fi
+
+        echo "pm=$pm" >> "$GITHUB_OUTPUT"
+    - if: steps.pm.outputs.pm == 'pnpm'
+      uses: pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e # v3.1.2
+      with:
+        runtime: node@${{ inputs.node-version }}
+        working-directory: ${{ inputs.working-directory }}
+        require-lockfile: true
+    - if: steps.pm.outputs.pm == 'npm'
+      uses: actions/setup-node@v7
+      with:
+        node-version: ${{ inputs.node-version }}
+    - if: steps.pm.outputs.pm == 'npm'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: npm ci
+
+    - id: pack
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        PM: ${{ steps.pm.outputs.pm }}
+        DEST: ${{ runner.temp }}/npm-build
+      run: |
+        "$PM" run --if-present build
+        rm -rf "$DEST"
+        mkdir -p "$DEST"
+        "$PM" pack --pack-destination "$DEST"
+        files=("$DEST"/*.tgz)
+        if [ "${#files[@]}" != 1 ] || [ ! -f "${files[0]}" ]; then
+          echo "::error::expected one tarball from '$PM pack', got: $(ls -A "$DEST" | tr '\n' ' ')"
+          exit 1
+        fi
+
+        echo "tarball=${files[0]}" >> "$GITHUB_OUTPUT"
+    - uses: actions/upload-artifact@v7
+      with:
+        name: ${{ inputs.artifact }}
+        path: ${{ steps.pack.outputs.tarball }}
+        if-no-files-found: error
+        overwrite: true

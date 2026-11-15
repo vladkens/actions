@@ -1,0 +1,9 @@
+{
+  "name": "@fixture/pnpm-pkg",
+  "version": "0.2.0",
+  "packageManager": "pnpm@11.28.11",
+  "files": ["dist"],
+  "scripts": {
+    "build": "mkdir -p dist && echo pnpm > dist/index.js"
+  }
+}
