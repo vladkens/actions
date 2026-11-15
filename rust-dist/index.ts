@@ -46,7 +46,7 @@ await main(() => {
   }
 
   // Linux and Windows from Linux or macOS, without Docker: zig is their C compiler and linker.
-  // Both come from PyPI, every wheel pinned by hash in zigbuild.txt.
+  // Both from PyPI, at known versions a few weeks old, not the latest.
   if (other.length) {
     const venv = join(process.env.RUNNER_TEMP || tmpdir(), "rust-dist-zig")
     const bin = join(venv, "bin")
@@ -55,11 +55,10 @@ await main(() => {
       "install",
       "--quiet",
       "--disable-pip-version-check",
-      "--require-hashes",
       "--only-binary",
       ":all:",
-      "-r",
-      join(import.meta.dirname, "zigbuild.txt"),
+      "cargo-zigbuild==0.23.4",
+      "ziglang==0.16.0",
     ])
     run("rustup", ["target", "add", ...other])
 
