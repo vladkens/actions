@@ -72,7 +72,8 @@ await main(() => {
       ["zigbuild", "--profile", profile, "--locked", ...zigTargets.flatMap(t => ["--target", t])],
       {
         env: {
-          CARGO_ZIGBUILD_ZIG_PATH: join(bin, "python-zig"),
+          // Its zig is `python -m ziglang` with this python first, before any zig on PATH.
+          CARGO_ZIGBUILD_PYTHON_PATH: join(bin, "python3"),
           // rust-build caches it
           ZIG_GLOBAL_CACHE_DIR: process.env.ZIG_GLOBAL_CACHE_DIR || join(homedir(), ".cache/zig"),
         },
