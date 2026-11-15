@@ -39,14 +39,15 @@ runs:
       with:
         node-version: "24"
 
-    # The tarball's own package.json is what npm publishes, so it must match the checkout's.
+    # Outside the checkout, like the publish below.
     - id: files
       if: steps.commit.outputs.release == 'true'
       name: Check the tarball
       shell: bash
+      working-directory: ${{ runner.temp }}
       env:
         DIST: ${{ runner.temp }}/npm-publish
-        PACKAGE: ${{ inputs.working-directory }}/package.json
+        PACKAGE: ${{ github.workspace }}/${{ inputs.working-directory }}/package.json
         VERSION: ${{ steps.check.outputs.version }}
       run: |
         name=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).name)' "$PACKAGE")
@@ -57,9 +58,22 @@ runs:
           exit 1
         fi
 
-        packed=$(tar -xzOf "$DIST/$file" package/package.json | node -e 'const p = JSON.parse(require("fs").readFileSync(0, "utf8")); console.log(`${p.name}@${p.version}`)') || packed=""
-        if [ "$packed" != "$name@$VERSION" ]; then
-          echo "::error::expected package/package.json for $name@$VERSION in $file, got '$packed'"
+        # npm publishes the manifest pacote reads from the tarball (its last package.json, under any
+        # top folder), so npm's own pacote reads it here. publishConfig is npm config at publish time
+        # (registry, proxy): only the checkout's is accepted.
+        got=$(node -e '
+          const [pacote, tarball, checkout] = process.argv.slice(1)
+          const want = JSON.parse(require("fs").readFileSync(checkout, "utf8"))
+          const config = (x) => JSON.stringify(x.publishConfig ?? null)
+          const same = (x) => x.name === want.name && x.version === want.version && config(x) === config(want)
+          require(pacote)
+            .manifest(`file:${tarball}`, { fullMetadata: true, fullReadJson: true })
+            .then((x) => (same(x) ? "" : `${x.name}@${x.version} with publishConfig ${config(x)}`))
+            .catch((e) => `an unreadable tarball (${e.message})`)
+            .then(console.log)
+        ' "$(npm root -g)/npm/node_modules/pacote" "$DIST/$file" "$PACKAGE")
+        if [ -n "$got" ]; then
+          echo "::error::expected $name@$VERSION with the checkout's publishConfig in $file, got $got"
           exit 1
         fi
 
