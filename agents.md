@@ -1,6 +1,6 @@
 # actions
 
-Shared release steps for vladkens' repos, as GitHub Actions used like `vladkens/actions/rust-build@v1`: a Rust repo releases with rust-build and rust-publish, a Python repo with py-build and py-publish. These are composite actions; rust-build, rust-publish and py-publish chain the smaller JavaScript actions here, which also work on their own.
+Shared release steps for vladkens' repos, as GitHub Actions used like `vladkens/actions/rust-build@v1`: a Rust repo releases with rust-build and rust-publish, a Python repo with py-build and py-publish, an npm repo with npm-build and npm-publish. These are composite actions; rust-build, rust-publish, py-publish and npm-publish chain the smaller JavaScript actions here, which also work on their own.
 
 An action's inputs and outputs are in its `action.yml`, its usage in the top `readme.md` or the action's own `readme.md`, the checks in the `Makefile` and `.github/workflows/test.yml`, plans in `docs/plans/`. Docs stay in these places: no progress journals or run logs.
 
@@ -13,7 +13,7 @@ An action's inputs and outputs are in its `action.yml`, its usage in the top `re
 - No runtime dependencies and no build step: each JavaScript action is `runs.using: node24` with `main: index.ts`, run by the runner's Node through type stripping, and talks to GitHub only through `gh` and `git`, preinstalled on the hosted runners.
 - A JavaScript action can't call another action: an official one (`actions/attest`, `rust-lang/crates-io-auth-action`) runs as a step of a composite action, or of the calling workflow when it can't run in a composite (`pypa/gh-action-pypi-publish`); never reimplement it.
 - Composite actions call this repo's actions as `$/<action>`, so all run at one commit.
-- rust-build and py-build run the project's build code and get no secrets or write token; rust-publish and py-publish write, never compile or run a build backend (rust-publish's `pack` only repackages rust-build's files), and trust nothing from the build's artifact but the files' bytes.
+- rust-build, py-build and npm-build run the project's build code and get no secrets or write token; rust-publish, py-publish and npm-publish write, never compile or run a build backend or package scripts (rust-publish's `pack` only repackages rust-build's files), and trust nothing from the build's artifact but the files' bytes.
 - Never publish test packages to crates.io, npm or PyPI; exercise releases only against this repo, crates.io only through `dry-run`, under throwaway tags the test deletes.
 - Adopting an action in another repo follows that repo's `agents.md`.
 

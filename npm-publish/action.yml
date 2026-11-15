@@ -1,0 +1,102 @@
+name: npm-publish
+description: The writing half of an npm release. On a release commit checks npm-build's tarball, creates the tag and GitHub release and publishes the tarball to npm through Trusted Publishing. Never builds or runs project code.
+inputs:
+  working-directory:
+    description: The directory with package.json and changelog.md.
+    default: .
+  releasers:
+    description: GitHub logins allowed to release, separated by spaces or commas. A release commit merged by anyone else fails before anything is published; one of them re-runs it.
+    default: ${{ github.repository_owner }}
+  artifact:
+    description: The artifact npm-build uploaded.
+    default: release
+outputs:
+  tag:
+    description: The released tag; empty when this run released nothing.
+    value: ${{ steps.check.outputs.tag }}
+runs:
+  using: composite
+  steps:
+    # Decided from the event, never from the artifact: the build's scripts could have written anything.
+    - id: commit
+      uses: $/release-commit
+
+    - id: check
+      if: steps.commit.outputs.release == 'true'
+      uses: $/release-check
+      with:
+        releasers: ${{ inputs.releasers }}
+        manifest: ${{ inputs.working-directory }}/package.json
+        changelog: ${{ inputs.working-directory }}/changelog.md
+    - if: steps.commit.outputs.release == 'true'
+      uses: actions/download-artifact@v8
+      with:
+        name: ${{ inputs.artifact }}
+        path: ${{ runner.temp }}/npm-publish
+    # Node 24's npm has Trusted Publishing (npm 11.5.1 and later).
+    - if: steps.commit.outputs.release == 'true'
+      uses: actions/setup-node@v7
+      with:
+        node-version: "24"
+
+    # Outside the checkout, like the publish below.
+    - id: files
+      if: steps.commit.outputs.release == 'true'
+      name: Check the tarball
+      shell: bash
+      working-directory: ${{ runner.temp }}
+      env:
+        DIST: ${{ runner.temp }}/npm-publish
+        PACKAGE: ${{ github.workspace }}/${{ inputs.working-directory }}/package.json
+        VERSION: ${{ steps.check.outputs.version }}
+      run: |
+        name=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).name)' "$PACKAGE")
+        file=$(echo "$name" | sed 's|^@||; s|/|-|')-$VERSION.tgz
+        found=$(ls -A "$DIST")
+        if [ "$found" != "$file" ] || [ -L "$DIST/$file" ] || [ ! -f "$DIST/$file" ]; then
+          echo "::error::expected only $file in the release files, got: $(echo "$found" | tr '\n' ' ')"
+          exit 1
+        fi
+
+        # npm publishes the manifest pacote reads from the tarball (its last package.json, under any
+        # top folder), so npm's own pacote reads it here. Its publishConfig and tag are npm config at
+        # publish time (a registry, a proxy, a dist-tag), so neither is accepted.
+        got=$(node -e '
+          const [pacote, tarball] = process.argv.slice(1)
+          require(pacote)
+            .manifest(`file:${tarball}`, { fullMetadata: true, fullReadJson: true })
+            .then((x) => [`${x.name}@${x.version}`, ...["publishConfig", "tag"].filter((k) => k in x)].join(" with "))
+            .catch((e) => `an unreadable tarball (${e.message})`)
+            .then(console.log)
+        ' "$(npm root -g)/npm/node_modules/pacote" "$DIST/$file")
+        if [ "$got" != "$name@$VERSION" ]; then
+          echo "::error::expected $name@$VERSION without publishConfig or tag in $file, got $got"
+          exit 1
+        fi
+
+        echo "name=$name" >> "$GITHUB_OUTPUT"
+        echo "tarball=$DIST/$file" >> "$GITHUB_OUTPUT"
+
+    - if: steps.commit.outputs.release == 'true'
+      uses: $/github-release
+      with:
+        tag: ${{ steps.check.outputs.tag }}
+        notes: ${{ steps.check.outputs.notes }}
+
+    # Outside the checkout: npm would read its package.json (`devEngines`) and .npmrc. Trusted
+    # Publishing also adds the provenance attestation.
+    - if: steps.commit.outputs.release == 'true'
+      name: Publish to npm
+      shell: bash
+      working-directory: ${{ runner.temp }}
+      env:
+        NAME: ${{ steps.files.outputs.name }}
+        VERSION: ${{ steps.check.outputs.version }}
+        TARBALL: ${{ steps.files.outputs.tarball }}
+      run: |
+        if [ "$(npm view "$NAME@$VERSION" version 2> /dev/null)" = "$VERSION" ]; then
+          echo "$NAME@$VERSION is already on npm"
+          exit 0
+        fi
+
+        npm publish "$TARBALL" --access public --ignore-scripts

@@ -352,7 +352,7 @@ jobs:
           tar xzf target/distrib/fixture-dev-aarch64-apple-darwin.tar.gz -C apple
           test "$(apple/fixture-bin)" = "fixture-bin 0.1.0"
 
-  # rust-build and py-build run the project's build code: both must refuse a job that could publish.
+  # rust-build, py-build and npm-build run the project's build code: each must refuse a job that could publish.
   build-refused:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
@@ -381,9 +381,18 @@ jobs:
         with:
           working-directory: tests/fixtures/pypkg
           artifact: py-test-write
+      - id: npm-build
+        name: npm-build (refuses this job)
+        continue-on-error: true
+        env:
+          EXPECT_FAILURE: "1"
+        uses: ./npm-build
+        with:
+          working-directory: tests/fixtures/npmpkg
+          artifact: npm-test-write
       - env:
-          OUTCOMES: ${{ steps.rust-build.outcome }} ${{ steps.py-build.outcome }}
-        run: test "$OUTCOMES" = "failure failure"
+          OUTCOMES: ${{ steps.rust-build.outcome }} ${{ steps.py-build.outcome }} ${{ steps.npm-build.outcome }}
+        run: test "$OUTCOMES" = "failure failure failure"
 
   # Real releases of this repo under throwaway tags, deleted at the end.
   releases:
@@ -671,3 +680,47 @@ jobs:
         run: |
           test -z "$RELEASED"
           test ! -e tests/fixtures/pypkg/dist
+
+  # npm-build on an npm and a pnpm package, then npm-publish, which does nothing outside a release
+  # commit; the release path is proven by the first release of a repo using them.
+  npm-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - id: pnpm
+        uses: ./npm-build
+        with:
+          working-directory: tests/fixtures/pnpmpkg
+          artifact: pnpm-test
+      - env:
+          TARBALL: ${{ steps.pnpm.outputs.tarball }}
+        run: |
+          test "$(basename "$TARBALL")" = fixture-pnpm-pkg-0.2.0.tgz
+          test "$(tar -xzOf "$TARBALL" package/dist/index.js)" = pnpm
+      - id: npm
+        uses: ./npm-build
+        with:
+          working-directory: tests/fixtures/npmpkg
+          artifact: npm-test
+      - env:
+          TARBALL: ${{ steps.npm.outputs.tarball }}
+        run: |
+          test "$(ls "$(dirname "$TARBALL")")" = fixture-pkg-0.1.0.tgz
+          test "$(tar -xzOf "$TARBALL" package/dist/index.js)" = npm
+
+  npm-publish:
+    needs: npm-build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - id: publish
+        uses: ./npm-publish
+        with:
+          working-directory: tests/fixtures/npmpkg
+          artifact: npm-test
+      - env:
+          RELEASED: ${{ steps.publish.outputs.tag }}
+        run: test -z "$RELEASED"

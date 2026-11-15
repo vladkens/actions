@@ -1,0 +1,8 @@
+{
+  "name": "fixture-pkg",
+  "version": "0.1.0",
+  "files": ["dist"],
+  "scripts": {
+    "build": "mkdir -p dist && echo npm > dist/index.js"
+  }
+}
