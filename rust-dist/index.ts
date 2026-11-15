@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readdirSync, realpathSync, rmSync } from "node:fs"
-import { homedir } from "node:os"
+import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
 
-import { env, fail, input, main, probe, required, run, setOutput } from "../lib/core.ts"
+import { env, fail, input, main, required, run, setOutput } from "../lib/core.ts"
 import { archiveName, isApple, isShipped, isWindows, parseTargets, profileDir } from "./dist.ts"
 
 type Metadata = {
@@ -29,6 +29,8 @@ await main(() => {
   const other = targets.filter(t => !isApple(t))
   if (apple.length && process.platform !== "darwin")
     fail(`${apple.join(", ")} needs a macOS runner`)
+  if (other.length && process.platform === "win32")
+    fail(`${other.join(", ")} needs a Linux or macOS runner`)
 
   // A profile with debug info then leaves `<bin>.dSYM` next to the binary, shipped with it.
   const profile = input("profile") || "release"
@@ -43,29 +45,36 @@ await main(() => {
     })
   }
 
-  // Linux and Windows from any host, without Docker: https://github.com/zijiren233/cargo-cross
+  // Linux and Windows from Linux or macOS, without Docker: zig is their C compiler and linker.
+  // Both from PyPI, at known versions a few weeks old, not the latest.
   if (other.length) {
-    if (probe("cargo", ["cross", "--version"]) === null) {
-      run("cargo", ["install", "--locked", "cargo-cross@1.6.0"], { stream: true })
-    }
+    const venv = join(process.env.RUNNER_TEMP || tmpdir(), "rust-dist-zig")
+    const bin = join(venv, "bin")
+    run("python3", ["-m", "venv", venv])
+    run(join(bin, "pip"), [
+      "install",
+      "--quiet",
+      "--disable-pip-version-check",
+      "--only-binary",
+      ":all:",
+      "cargo-zigbuild==0.23.4",
+      "ziglang==0.16.0",
+    ])
+    run("rustup", ["target", "add", ...other])
 
+    // `<target>.2.28` links against glibc 2.28; the build still goes to target/<target>.
+    const zigTargets = other.map(t => (t.includes("-linux-gnu") ? `${t}.2.28` : t))
+    // The venv's cargo-zigbuild and zig, not others in ~/.cargo/bin or PATH: `cargo zigbuild`
+    // would look there first.
     run(
-      "cargo",
-      [
-        "cross",
-        "build",
-        "--profile",
-        profile,
-        "--locked",
-        "--glibc-version",
-        "2.28",
-        "--targets",
-        other.join(","),
-      ],
+      join(bin, "cargo-zigbuild"),
+      ["zigbuild", "--profile", profile, "--locked", ...zigTargets.flatMap(t => ["--target", t])],
       {
         env: {
-          CROSS_COMPILER_DIR:
-            process.env.CROSS_COMPILER_DIR || join(homedir(), ".cache/cargo-cross"),
+          // Its zig is `python -m ziglang` with this python first, before any zig on PATH.
+          CARGO_ZIGBUILD_PYTHON_PATH: join(bin, "python3"),
+          // rust-build caches it
+          ZIG_GLOBAL_CACHE_DIR: process.env.ZIG_GLOBAL_CACHE_DIR || join(homedir(), ".cache/zig"),
         },
         stream: true,
       },

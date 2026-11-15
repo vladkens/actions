@@ -2,7 +2,7 @@ name: rust-dist
 description: Build a crate's binaries for a list of targets and pack each into target/distrib with the readme and license.
 inputs:
   targets:
-    description: Rust targets, e.g. `aarch64-apple-darwin x86_64-unknown-linux-gnu x86_64-pc-windows-gnu`. Apple ones need a macOS runner.
+    description: Rust targets, e.g. `aarch64-apple-darwin x86_64-unknown-linux-gnu x86_64-pc-windows-gnu`. Apple ones need a macOS runner, the rest a Linux or macOS one.
     required: true
   profile:
     description: The cargo profile to build; with debug info it also ships `<bin>.dSYM` for Apple targets.
