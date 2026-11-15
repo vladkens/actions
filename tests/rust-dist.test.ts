@@ -1,7 +1,14 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 
-import { archiveName, isApple, isShipped, parseTargets, profileDir } from "../rust-dist/dist.ts"
+import {
+  archiveName,
+  isApple,
+  isShipped,
+  parseTargets,
+  profileDir,
+  settledVersions,
+} from "../rust-dist/dist.ts"
 
 test("targets from spaces, commas and lines", () => {
   assert.deepEqual(parseTargets(" a-apple-darwin, b-unknown-linux-gnu\nc-pc-windows-gnu "), [
@@ -51,4 +58,21 @@ test("profile directories", () => {
   assert.equal(profileDir("release"), "release")
   assert.equal(profileDir("dist"), "dist")
   assert.equal(profileDir("dev"), "debug")
+})
+
+test("settled versions: final, a week old, nothing yanked, newest first", () => {
+  const at = (day: number, yanked = false) => ({
+    upload_time_iso_8601: new Date(Date.UTC(2026, 10, day)).toISOString(),
+    yanked,
+  })
+  const releases = {
+    "0.9.0": [at(1)],
+    "0.10.0": [at(2), at(3)],
+    "0.10.1": [at(4, true)],
+    "0.11.0rc1": [at(4)],
+    "0.11.0": [at(4), at(9)],
+    "0.12.0": [at(9)],
+    "0.13.0": [],
+  }
+  assert.deepEqual(settledVersions(releases, Date.UTC(2026, 10, 8)), ["0.10.0", "0.9.0"])
 })

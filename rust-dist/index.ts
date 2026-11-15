@@ -3,14 +3,39 @@ import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
 
 import { env, fail, input, main, required, run, setOutput } from "../lib/core.ts"
-import { archiveName, isApple, isShipped, isWindows, parseTargets, profileDir } from "./dist.ts"
+import {
+  archiveName,
+  isApple,
+  isShipped,
+  isWindows,
+  parseTargets,
+  profileDir,
+  settledVersions,
+} from "./dist.ts"
 
 type Metadata = {
   target_directory: string
   packages: { name: string; manifest_path: string; targets: { name: string; kind: string[] }[] }[]
 }
 
-await main(() => {
+// The newest release of a PyPI package that is a week old and has no known vulnerability: nothing
+// to update by hand, and a broken or malicious release is usually pulled within days.
+const settled = async (name: string): Promise<string> => {
+  const get = async (path: string) => {
+    const res = await fetch(`https://pypi.org/pypi/${path}/json`)
+    if (!res.ok) fail(`PyPI ${path}: HTTP ${res.status}`)
+    return await res.json()
+  }
+
+  const { releases } = await get(name)
+  for (const version of settledVersions(releases, Date.now() - 7 * 86_400_000)) {
+    const { vulnerabilities } = await get(`${name}/${version}`)
+    if (!vulnerabilities.some((x: { withdrawn: string | null }) => !x.withdrawn)) return version
+  }
+  return fail(`PyPI ${name}: no release a week old without known vulnerabilities`)
+}
+
+await main(async () => {
   if (input("working-directory")) process.chdir(input("working-directory"))
 
   const targets = parseTargets(required("targets"))
@@ -46,7 +71,7 @@ await main(() => {
   }
 
   // Linux and Windows from Linux or macOS, without Docker: zig is their C compiler and linker.
-  // Both from PyPI, at known versions a few weeks old, not the latest.
+  // Both from PyPI, each the newest release a week old.
   if (other.length) {
     const venv = join(process.env.RUNNER_TEMP || tmpdir(), "rust-dist-zig")
     const bin = join(venv, "bin")
@@ -57,8 +82,8 @@ await main(() => {
       "--disable-pip-version-check",
       "--only-binary",
       ":all:",
-      "cargo-zigbuild==0.23.4",
-      "ziglang==0.16.0",
+      `cargo-zigbuild==${await settled("cargo-zigbuild")}`,
+      `ziglang==${await settled("ziglang")}`,
     ])
     run("rustup", ["target", "add", ...other])
 
