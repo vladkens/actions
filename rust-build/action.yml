@@ -26,7 +26,7 @@ inputs:
     description: Cache cargo's registry and target/ (Swatinem/rust-cache).
     default: "true"
   cache-directories:
-    description: More directories for that cache, one per line (e.g. cross toolchains).
+    description: More directories for that cache, one per line.
     default: ""
   artifact:
     description: The artifact name rust-publish downloads.
@@ -90,7 +90,7 @@ runs:
       with:
         cache-directories: |
           ${{ inputs.cache-directories }}
-          ${{ inputs.targets != '' && '~/.cache/cargo-cross' || '' }}
+          ${{ inputs.targets != '' && '~/.cache/zig' || '' }}
     # After the cache, whose key hashes Cargo.lock. A release keeps its plain version: its files
     # are published as they are. So does a release PR, which builds them the same way.
     - if: steps.plan.outputs.build == 'true' && inputs.dev-version == 'true' && steps.check.outcome == 'skipped' && steps.pr-check.outcome == 'skipped'
