@@ -59,21 +59,18 @@ runs:
         fi
 
         # npm publishes the manifest pacote reads from the tarball (its last package.json, under any
-        # top folder), so npm's own pacote reads it here. publishConfig is npm config at publish time
-        # (registry, proxy): only the checkout's is accepted.
+        # top folder), so npm's own pacote reads it here. Its publishConfig and tag are npm config at
+        # publish time (a registry, a proxy, a dist-tag), so neither is accepted.
         got=$(node -e '
-          const [pacote, tarball, checkout] = process.argv.slice(1)
-          const want = JSON.parse(require("fs").readFileSync(checkout, "utf8"))
-          const config = (x) => JSON.stringify(x.publishConfig ?? null)
-          const same = (x) => x.name === want.name && x.version === want.version && config(x) === config(want)
+          const [pacote, tarball] = process.argv.slice(1)
           require(pacote)
             .manifest(`file:${tarball}`, { fullMetadata: true, fullReadJson: true })
-            .then((x) => (same(x) ? "" : `${x.name}@${x.version} with publishConfig ${config(x)}`))
+            .then((x) => [`${x.name}@${x.version}`, ...["publishConfig", "tag"].filter((k) => k in x)].join(" with "))
             .catch((e) => `an unreadable tarball (${e.message})`)
             .then(console.log)
-        ' "$(npm root -g)/npm/node_modules/pacote" "$DIST/$file" "$PACKAGE")
-        if [ -n "$got" ]; then
-          echo "::error::expected $name@$VERSION with the checkout's publishConfig in $file, got $got"
+        ' "$(npm root -g)/npm/node_modules/pacote" "$DIST/$file")
+        if [ "$got" != "$name@$VERSION" ]; then
+          echo "::error::expected $name@$VERSION without publishConfig or tag in $file, got $got"
           exit 1
         fi
 
