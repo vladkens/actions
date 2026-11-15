@@ -30,4 +30,4 @@ The job needs no `permissions:` beyond the workflow's `contents: read`. Its `if:
 | `cache-directories` | | More directories for that cache, one per line |
 | `artifact` | `release` | The artifact name rust-publish downloads |
 
-No outputs. Release commits, release PRs and manual runs always build the files; other pushes only with `dev: true`. Apple targets need a macOS runner; Linux and Windows ones build on a Linux or macOS runner through [cargo-zigbuild](https://github.com/rust-cross/cargo-zigbuild), with zig as the C compiler and linker (glibc 2.28), both from PyPI at pinned versions.
+No outputs. Release commits, release PRs and manual runs always build the files; other pushes only with `dev: true`. Apple targets need a macOS runner; Linux and Windows ones build on a Linux or macOS runner through [cargo-zigbuild](https://github.com/rust-cross/cargo-zigbuild), with zig as the C compiler and linker (glibc 2.28), both from PyPI, each the newest release that is a week old and has no known vulnerability.
